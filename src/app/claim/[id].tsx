@@ -17,21 +17,23 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ImagePickerButton } from '@/components/ImagePickerButton';
+import { useAuth } from '@/context/AuthContext';
 import { useCampusData } from '@/context/CampusDataContext';
 
 export default function ClaimItemScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const { user } = useAuth();
   const { getItemById, submitClaim } = useCampusData();
 
   const item = getItemById(id as string);
 
-  // Form states
-  const [studentName, setStudentName] = useState('');
-  const [studentNim, setStudentNim] = useState('');
-  const [studentFaculty, setStudentFaculty] = useState('');
-  const [studentPhone, setStudentPhone] = useState('');
+  // Form states prefilled from authenticated student
+  const [studentName, setStudentName] = useState(user?.name || '');
+  const [studentNim, setStudentNim] = useState(user?.nim || '');
+  const [studentFaculty, setStudentFaculty] = useState(user?.faculty || '');
+  const [studentPhone, setStudentPhone] = useState(user?.phone || '');
   const [proofDetails, setProofDetails] = useState('');
   const [idCardImage, setIdCardImage] = useState<string>('');
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -87,6 +89,7 @@ export default function ClaimItemScreen() {
         itemTitle: item.title,
         itemCategory: item.category,
         itemImage: item.image,
+        userId: user?.id,
         studentName: studentName.trim(),
         studentNim: studentNim.trim(),
         studentFaculty: studentFaculty.trim(),

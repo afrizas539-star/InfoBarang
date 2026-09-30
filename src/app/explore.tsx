@@ -18,17 +18,31 @@ import { StudentBottomNav } from '@/components/StudentBottomNav';
 import { CAMPUS_CATEGORIES, CAMPUS_FACULTIES } from '@/constants/initialData';
 import { useCampusData } from '@/context/CampusDataContext';
 
+import { useAuth } from '@/context/AuthContext';
+
 export default function ExploreScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const { isAuthenticated, isLoadingAuth } = useAuth();
   const { items } = useCampusData();
+
+  useEffect(() => {
+    if (!isLoadingAuth && !isAuthenticated) {
+      router.replace('/login');
+    }
+  }, [isAuthenticated, isLoadingAuth]);
 
   const [search, setSearch] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('Semua');
   const [selectedFaculty, setSelectedFaculty] = useState('Semua Fakultas');
   const [selectedType, setSelectedType] = useState<'all' | 'lost' | 'found'>('all');
 
-  const filteredItems = items.filter((item) => {
+  // Hanya barang temuan dan barang hilang yang sudah disetujui admin
+  const publicItems = items.filter(
+    (item) => item.type === 'found' || item.verificationStatus === 'Disetujui' || !item.verificationStatus
+  );
+
+  const filteredItems = publicItems.filter((item) => {
     const matchCat = selectedCategory === 'Semua' || item.category === selectedCategory;
     const matchFac =
       selectedFaculty === 'Semua Fakultas' ||

@@ -62,7 +62,7 @@ export const AdminHeader: React.FC<AdminHeaderProps> = ({
         <TouchableOpacity
           style={styles.studentModeBtn}
           activeOpacity={0.8}
-          onPress={() => router.replace('/')}
+          onPress={() => router.push('/home')}
         >
           <Ionicons name="eye-outline" size={15} color="#CBD5E1" />
           <Text style={styles.studentModeText}>Mode Mhs</Text>

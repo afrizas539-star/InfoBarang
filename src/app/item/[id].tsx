@@ -54,16 +54,19 @@ export default function ItemDetailScreen() {
   const canClaim =
     item.type === 'found' &&
     item.status !== 'Sudah Diambil' &&
-    item.status !== 'Selesai';
+    item.status !== 'Selesai' &&
+    item.status !== 'DIAMBIL / SELESAI';
 
-  const ALL_STATUSES: ItemStatus[] = [
-    'Barang Ditemukan',
-    'Menunggu Klaim',
-    'Proses Klaim',
-    'Terverifikasi',
-    'Sudah Diambil',
-    'Selesai',
-    'Dalam Pencarian',
+  // PRIORITAS 8: Status Barang Hilang dan Temuan Dipisah
+  const LOST_STATUSES: ItemStatus[] = [
+    'DALAM PENCARIAN',
+    'BARANG DITEMUKAN',
+    'SELESAI',
+  ];
+
+  const FOUND_STATUSES: ItemStatus[] = [
+    'TERSEDIA',
+    'DIAMBIL / SELESAI',
   ];
 
   const handleUpdateStatus = async (newStatus: ItemStatus) => {
@@ -317,7 +320,7 @@ export default function ItemDetailScreen() {
               Pilih status terkini untuk disinkronkan secara real-time ke aplikasi mahasiswa:
             </Text>
 
-            {ALL_STATUSES.map((st) => {
+            {(item.type === 'lost' ? LOST_STATUSES : FOUND_STATUSES).map((st) => {
               const isCurrent = item.status === st;
               const colorInfo = STATUS_COLORS[st];
               return (

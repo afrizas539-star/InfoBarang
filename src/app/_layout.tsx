@@ -27,7 +27,6 @@ export default function RootLayout() {
       <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
         <AuthProvider>
           <CampusDataProvider>
-            <AnimatedSplashOverlay />
             <Stack
               screenOptions={{
                 headerShown: false,
@@ -36,9 +35,17 @@ export default function RootLayout() {
               }}
             >
               <Stack.Screen name="index" />
+              <Stack.Screen name="login" options={{ animation: 'fade' }} />
+              <Stack.Screen name="home" />
               <Stack.Screen name="explore" />
               <Stack.Screen name="claims" />
               <Stack.Screen name="profile" />
+              <Stack.Screen
+                name="report-lost"
+                options={{
+                  animation: 'slide_from_bottom',
+                }}
+              />
               <Stack.Screen
                 name="item/[id]"
                 options={{
@@ -58,6 +65,7 @@ export default function RootLayout() {
                 }}
               />
               <Stack.Screen name="admin/dashboard" />
+              <Stack.Screen name="admin/reports" />
               <Stack.Screen name="admin/items" />
               <Stack.Screen name="admin/create" />
               <Stack.Screen name="admin/claims" />

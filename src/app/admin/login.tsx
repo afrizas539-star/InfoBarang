@@ -92,7 +92,7 @@ export default function AdminLoginScreen() {
       >
         <TouchableOpacity
           style={styles.backToStudentBtn}
-          onPress={() => router.replace('/')}
+          onPress={() => router.replace('/login')}
           activeOpacity={0.7}
         >
           <Ionicons name="arrow-back" size={18} color="#CBD5E1" />

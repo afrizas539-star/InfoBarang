@@ -29,7 +29,7 @@ export const StudentBottomNav: React.FC<StudentBottomNavProps> = ({ activeTab })
       label: 'Home',
       iconOutline: 'home-outline' as const,
       iconFilled: 'home' as const,
-      route: '/',
+      route: '/home',
     },
     {
       id: 'explore',

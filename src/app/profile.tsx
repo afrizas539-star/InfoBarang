@@ -19,7 +19,25 @@ import { useAuth } from '@/context/AuthContext';
 export default function StudentProfileScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { isAdminAuthenticated } = useAuth();
+  const { user, isAdminAuthenticated, logout } = useAuth();
+
+  const handleLogout = () => {
+    Alert.alert(
+      'Konfirmasi Logout',
+      'Apakah Anda yakin ingin keluar dari akun mahasiswa?',
+      [
+        { text: 'Batal', style: 'cancel' },
+        {
+          text: 'Keluar',
+          style: 'destructive',
+          onPress: async () => {
+            await logout();
+            router.replace('/login');
+          },
+        },
+      ]
+    );
+  };
 
   return (
     <View style={styles.container}>
@@ -34,9 +52,9 @@ export default function StudentProfileScreen() {
           },
         ]}
       >
-        <Text style={styles.headerTitle}>Bantuan & Layanan Civitas</Text>
+        <Text style={styles.headerTitle}>Profil & Bantuan Civitas</Text>
         <Text style={styles.headerSubtitle}>
-          Pusat informasi lost & found resmi universitas
+          Pusat akun dan informasi lost & found resmi universitas
         </Text>
       </View>
 
@@ -44,15 +62,18 @@ export default function StudentProfileScreen() {
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-        {/* Civitas Card */}
+        {/* Civitas / Student Profile Card */}
         <View style={styles.civitasCard}>
           <View style={styles.civitasIconCircle}>
-            <Ionicons name="school" size={26} color="#2563EB" />
+            <Ionicons name="person" size={24} color="#2563EB" />
           </View>
           <View style={styles.civitasInfo}>
-            <Text style={styles.civitasTitle}>Civitas Akademika Kampus</Text>
+            <Text style={styles.civitasTitle}>{user?.name || 'Mahasiswa Kampus'}</Text>
+            <Text style={styles.civitasMeta}>
+              {user?.nim ? `NIM: ${user.nim}` : 'Mahasiswa Terdaftar'}
+            </Text>
             <Text style={styles.civitasDesc}>
-              Akses khusus mahasiswa dan dosen untuk mencari dan mengklaim barang yang tertinggal di lingkungan kampus.
+              {user?.email || 'mahasiswa@kampus.ac.id'}
             </Text>
           </View>
         </View>
@@ -161,6 +182,16 @@ export default function StudentProfileScreen() {
             </Text>
           </View>
           <Ionicons name="chevron-forward" size={18} color="#818CF8" />
+        </TouchableOpacity>
+
+        {/* Logout Button */}
+        <TouchableOpacity
+          activeOpacity={0.8}
+          style={styles.logoutBtn}
+          onPress={handleLogout}
+        >
+          <Ionicons name="log-out-outline" size={20} color="#DC2626" />
+          <Text style={styles.logoutBtnText}>Keluar dari Akun Mahasiswa</Text>
         </TouchableOpacity>
       </ScrollView>
 
@@ -349,5 +380,28 @@ const styles = StyleSheet.create({
     color: '#94A3B8',
     marginTop: 3,
     lineHeight: 16,
+  },
+  civitasMeta: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#2563EB',
+    marginTop: 2,
+  },
+  logoutBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#FEE2E2',
+    paddingVertical: 14,
+    borderRadius: 14,
+    gap: 8,
+    marginTop: 18,
+    borderWidth: 1,
+    borderColor: '#FECDD3',
+  },
+  logoutBtnText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#DC2626',
   },
 });
