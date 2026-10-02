@@ -102,7 +102,7 @@ export default function AdminProfileScreen() {
           style: 'destructive',
           onPress: async () => {
             await logout();
-            router.replace('/');
+            router.replace('/login');
           },
         },
       ]

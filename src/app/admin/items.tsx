@@ -38,14 +38,25 @@ export default function AdminItemsScreen() {
   const [selectedStatusFilter, setSelectedStatusFilter] = useState('Semua Status');
   const [selectedItemForStatus, setSelectedItemForStatus] = useState<CampusItem | null>(null);
 
-  const ALL_STATUSES: ItemStatus[] = [
-    'Barang Ditemukan',
-    'Menunggu Klaim',
-    'Proses Klaim',
-    'Terverifikasi',
-    'Sudah Diambil',
-    'Selesai',
-    'Dalam Pencarian',
+  // PRIORITAS 8: Status Barang Hilang dan Temuan Dipisah
+  const LOST_STATUSES: ItemStatus[] = [
+    'DALAM PENCARIAN',
+    'BARANG DITEMUKAN',
+    'SELESAI',
+  ];
+
+  const FOUND_STATUSES: ItemStatus[] = [
+    'TERSEDIA',
+    'DIAMBIL / SELESAI',
+  ];
+
+  const ALL_STATUS_FILTERS: string[] = [
+    'Semua Status',
+    'TERSEDIA',
+    'DALAM PENCARIAN',
+    'BARANG DITEMUKAN',
+    'DIAMBIL / SELESAI',
+    'SELESAI',
   ];
 
   const filteredItems = items.filter((item) => {
@@ -120,7 +131,7 @@ export default function AdminItemsScreen() {
         <FlatList
           horizontal
           showsHorizontalScrollIndicator={false}
-          data={['Semua Status', ...ALL_STATUSES]}
+          data={ALL_STATUS_FILTERS}
           keyExtractor={(item) => item}
           contentContainerStyle={styles.statusFilterScroll}
           renderItem={({ item: st }) => {
@@ -222,7 +233,7 @@ export default function AdminItemsScreen() {
                   Pilih status baru. Status yang dipilih akan langsung diperbarui di seluruh halaman mahasiswa:
                 </Text>
 
-                {ALL_STATUSES.map((st) => {
+                {(selectedItemForStatus.type === 'lost' ? LOST_STATUSES : FOUND_STATUSES).map((st) => {
                   const isCurrent = selectedItemForStatus.status === st;
                   const color = STATUS_COLORS[st]?.text || '#4F46E5';
                   return (

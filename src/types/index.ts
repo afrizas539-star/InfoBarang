@@ -1,12 +1,56 @@
+export type UserRole = 'student' | 'admin';
+
+export interface User {
+  id: string;
+  name: string;
+  email: string;
+  role: UserRole;
+  phone: string;
+  photo?: string;
+  nim?: string;
+  faculty?: string;
+}
+
 export type ItemType = 'lost' | 'found';
 
+/**
+ * STATUS BARANG HILANG (PRIORITAS 8):
+ * 1. DALAM PENCARIAN
+ * 2. BARANG DITEMUKAN
+ * 3. SELESAI
+ */
+export type LostItemStatus = 'DALAM PENCARIAN' | 'BARANG DITEMUKAN' | 'SELESAI';
+
+/**
+ * STATUS VERIFIKASI LAPORAN HILANG (PRIORITAS 6 & 7):
+ */
+export type VerificationStatus = 'Menunggu Verifikasi' | 'Disetujui' | 'Ditolak';
+
+/**
+ * STATUS BARANG TEMUAN (PRIORITAS 8):
+ * 1. TERSEDIA
+ * 2. DIAMBIL / SELESAI
+ */
+export type FoundItemStatus = 'TERSEDIA' | 'DIAMBIL / SELESAI';
+
+/**
+ * ItemStatus menyeluruh yang kompatibel dengan UI dan badge
+ */
 export type ItemStatus =
+  | 'DALAM PENCARIAN'
+  | 'BARANG DITEMUKAN'
+  | 'TERSEDIA'
+  | 'DIAMBIL / SELESAI'
+  | 'SELESAI'
+  | 'Selesai'
+  | 'Menunggu Verifikasi'
+  | 'Disetujui'
+  | 'Ditolak'
   | 'Barang Ditemukan'
   | 'Menunggu Klaim'
   | 'Proses Klaim'
   | 'Terverifikasi'
   | 'Sudah Diambil'
-  | 'Selesai'
   | 'Dalam Pencarian'
   | 'Klaim Ditolak';
 
@@ -25,6 +69,45 @@ export interface CampusItem {
   reporter: string;
   image: string;
   createdAt?: string;
+  userId?: string;
+  lostStatus?: LostItemStatus;
+  foundStatus?: FoundItemStatus;
+  verificationStatus?: VerificationStatus;
+  foundItemId?: string;
+  linkedLostItemId?: string;
+  additionalInfo?: string;
+}
+
+export interface LostItem {
+  id: string;
+  userId: string;
+  name: string;
+  category: string;
+  description: string;
+  location: string;
+  lostDate: string;
+  photo?: string;
+  status: LostItemStatus;
+  verificationStatus: VerificationStatus;
+  foundItemId?: string;
+  additionalInfo?: string;
+  faculty?: string;
+  createdAt?: string;
+}
+
+export interface FoundItem {
+  id: string;
+  name: string;
+  category: string;
+  description: string;
+  location: string;
+  foundDate: string;
+  photo?: string;
+  status: FoundItemStatus;
+  linkedLostItemId?: string;
+  reporter?: string;
+  faculty?: string;
+  createdAt?: string;
 }
 
 export type ClaimStatus = 'Menunggu Verifikasi' | 'Terverifikasi' | 'Klaim Ditolak';
@@ -35,6 +118,7 @@ export interface ClaimRequest {
   itemTitle: string;
   itemCategory: string;
   itemImage?: string;
+  userId?: string;
   studentName: string;
   studentNim: string;
   studentFaculty: string;
@@ -45,6 +129,7 @@ export interface ClaimRequest {
   adminNotes?: string;
   createdAt: string;
   verifiedAt?: string;
+  verifiedBy?: string;
 }
 
 export interface AdminProfile {

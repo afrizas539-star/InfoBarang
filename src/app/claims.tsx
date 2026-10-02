@@ -13,6 +13,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { useAuth } from '@/context/AuthContext';
 import { StudentBottomNav } from '@/components/StudentBottomNav';
 import { useCampusData } from '@/context/CampusDataContext';
 import { ClaimRequest } from '@/types';
@@ -20,7 +21,19 @@ import { ClaimRequest } from '@/types';
 export default function StudentClaimsScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const { user, isAuthenticated, isLoadingAuth } = useAuth();
   const { claims } = useCampusData();
+
+  useEffect(() => {
+    if (!isLoadingAuth && !isAuthenticated) {
+      router.replace('/login');
+    }
+  }, [isAuthenticated, isLoadingAuth]);
+
+  // Filter klaim milik mahasiswa yang aktif
+  const studentClaims = claims.filter(
+    (c) => !c.userId || c.userId === user?.id || c.studentNim === user?.nim || c.studentName === user?.name
+  );
 
   const [selectedClaim, setSelectedClaim] = useState<ClaimRequest | null>(null);
 
@@ -67,7 +80,7 @@ export default function StudentClaimsScreen() {
 
       {/* Claims List */}
       <FlatList
-        data={claims}
+        data={studentClaims}
         keyExtractor={(item) => item.id}
         contentContainerStyle={styles.listContent}
         showsVerticalScrollIndicator={false}

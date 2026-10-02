@@ -44,6 +44,9 @@ export default function AdminDashboardScreen() {
     (i) => i.status === 'Terverifikasi' || i.status === 'Sudah Diambil' || i.status === 'Selesai'
   ).length;
   const pendingClaims = claims.filter((c) => c.status === 'Menunggu Verifikasi');
+  const pendingLostReports = items.filter(
+    (i) => i.type === 'lost' && i.verificationStatus === 'Menunggu Verifikasi'
+  );
 
   const recentItems = items.slice(0, 5);
 
@@ -91,6 +94,20 @@ export default function AdminDashboardScreen() {
           </TouchableOpacity>
 
           <TouchableOpacity
+            style={[styles.actionBtn, { backgroundColor: '#B45309' }]}
+            activeOpacity={0.8}
+            onPress={() => router.push('/admin/reports' as any)}
+          >
+            <Ionicons name="shield" size={22} color="#FFFFFF" />
+            <Text style={styles.actionBtnText}>Verif Hilang</Text>
+            {pendingLostReports.length > 0 && (
+              <View style={styles.actionBadge}>
+                <Text style={styles.actionBadgeText}>{pendingLostReports.length}</Text>
+              </View>
+            )}
+          </TouchableOpacity>
+
+          <TouchableOpacity
             style={[styles.actionBtn, { backgroundColor: '#1E293B' }]}
             activeOpacity={0.8}
             onPress={() => router.push('/admin/items')}
@@ -100,7 +117,7 @@ export default function AdminDashboardScreen() {
           </TouchableOpacity>
 
           <TouchableOpacity
-            style={[styles.actionBtn, { backgroundColor: '#D97706' }]}
+            style={[styles.actionBtn, { backgroundColor: '#059669' }]}
             activeOpacity={0.8}
             onPress={() => router.push('/admin/claims')}
           >
@@ -173,6 +190,28 @@ export default function AdminDashboardScreen() {
               </Text>
             </View>
             <Ionicons name="chevron-forward" size={18} color="#D97706" />
+          </TouchableOpacity>
+        )}
+
+        {/* Pending Lost Reports Alert Card (Prioritas 7) */}
+        {pendingLostReports.length > 0 && (
+          <TouchableOpacity
+            style={[styles.pendingAlertCard, { backgroundColor: '#78350F', marginTop: 8 }]}
+            activeOpacity={0.85}
+            onPress={() => router.push('/admin/reports' as any)}
+          >
+            <View style={[styles.pendingAlertIcon, { backgroundColor: '#B45309' }]}>
+              <Ionicons name="shield-outline" size={22} color="#FFFFFF" />
+            </View>
+            <View style={styles.pendingAlertContent}>
+              <Text style={styles.pendingAlertTitle}>
+                {pendingLostReports.length} Laporan Kehilangan Baru Menunggu Verifikasi
+              </Text>
+              <Text style={styles.pendingAlertSub}>
+                Periksa laporan mahasiswa dan terbitkan ke katalog resmi kampus.
+              </Text>
+            </View>
+            <Ionicons name="chevron-forward" size={18} color="#FDE68A" />
           </TouchableOpacity>
         )}
 

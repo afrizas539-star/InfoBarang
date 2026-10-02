@@ -24,6 +24,21 @@ export const CAMPUS_FACULTIES = [
 ];
 
 export const STATUS_COLORS: Record<ItemStatus, { bg: string; text: string; border: string }> = {
+  // Status Barang Hilang (Prioritas 8)
+  'DALAM PENCARIAN': { bg: '#FEE2E2', text: '#B91C1C', border: '#FCA5A5' },
+  'BARANG DITEMUKAN': { bg: '#DBEAFE', text: '#1D4ED8', border: '#93C5FD' },
+  'SELESAI': { bg: '#E2E8F0', text: '#334155', border: '#94A3B8' },
+
+  // Status Barang Temuan (Prioritas 8)
+  'TERSEDIA': { bg: '#DCFCE7', text: '#15803D', border: '#86EFAC' },
+  'DIAMBIL / SELESAI': { bg: '#F1F5F9', text: '#475569', border: '#CBD5E1' },
+
+  // Status Verifikasi Laporan Kehilangan (Prioritas 6 & 7)
+  'Menunggu Verifikasi': { bg: '#FEF3C7', text: '#B45309', border: '#FDE68A' },
+  'Disetujui': { bg: '#DCFCE7', text: '#15803D', border: '#86EFAC' },
+  'Ditolak': { bg: '#FFE4E6', text: '#BE123C', border: '#FECDD3' },
+
+  // Status Tambahan untuk kompatibilitas
   'Barang Ditemukan': { bg: '#DCFCE7', text: '#15803D', border: '#86EFAC' },
   'Menunggu Klaim': { bg: '#FEF3C7', text: '#B45309', border: '#FDE68A' },
   'Proses Klaim': { bg: '#E0E7FF', text: '#4338CA', border: '#C7D2FE' },
