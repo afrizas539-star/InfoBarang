@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import React, { useState } from 'react';
+import { useEffect, useState } from 'react'; // <-- Ditambahkan useEffect di sini
 import {
   FlatList,
   Modal,
@@ -13,8 +13,8 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { useAuth } from '@/context/AuthContext';
 import { StudentBottomNav } from '@/components/StudentBottomNav';
+import { useAuth } from '@/context/AuthContext';
 import { useCampusData } from '@/context/CampusDataContext';
 import { ClaimRequest } from '@/types';
 
@@ -216,7 +216,7 @@ export default function StudentClaimsScreen() {
                 <View style={styles.infoBlock}>
                   <Text style={styles.blockLabel}>Data Pengaju:</Text>
                   <Text style={styles.blockValue}>
-                    {selectedClaim.studentName} • NIM {selectedClaim.studentNim}
+                    {selectedClaim.studentName} (NIM: {selectedClaim.studentNim})
                   </Text>
                   <Text style={styles.blockValueSub}>{selectedClaim.studentFaculty}</Text>
                   <Text style={styles.blockValueSub}>WhatsApp: {selectedClaim.studentPhone}</Text>

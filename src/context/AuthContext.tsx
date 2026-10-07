@@ -1,7 +1,9 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 
+
 import { secureStorage } from '@/services/storage/secureStorage';
 import { AdminProfile, User, UserRole } from '@/types';
+
 
 interface AuthContextType {
   user: User | null;
@@ -34,6 +36,7 @@ interface AuthContextType {
   ) => Promise<{ success: boolean; message?: string }>;
 }
 
+
 const DEFAULT_ADMIN: AdminProfile = {
   name: 'Budi Santoso, S.Sos',
   email: 'admin.kampus@gmail.com',
@@ -43,6 +46,7 @@ const DEFAULT_ADMIN: AdminProfile = {
   role: 'Petugas Pengelola Lost & Found Kampus',
   officeLocation: 'Posko Keamanan Pusat (Gedung Rektorat Lt. 1)',
 };
+
 
 const DEFAULT_STUDENT: User = {
   id: 'mhs-2210511045',
@@ -55,22 +59,27 @@ const DEFAULT_STUDENT: User = {
   photo: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?q=80&w=400&auto=format&fit=crop',
 };
 
+
 // SecureStore Keys (Terenkripsi, Prioritas 3)
 const SECURE_KEY_TOKEN = 'auth_session_token';
 const SECURE_KEY_USER = 'auth_active_user';
 const SECURE_KEY_ROLE = 'auth_active_role';
 const SECURE_KEY_ADMIN_PROFILE = 'admin_profile_data';
 
+
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
+
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
   const [adminProfile, setAdminProfile] = useState<AdminProfile>(DEFAULT_ADMIN);
   const [isLoadingAuth, setIsLoadingAuth] = useState<boolean>(true);
 
+
   useEffect(() => {
     loadSession();
   }, []);
+
 
   const loadSession = async () => {
     try {
@@ -80,9 +89,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setAdminProfile(savedAdminProfile);
       }
 
+
       // 2. Cek token sesi dan data user yang tersimpan
       const sessionToken = await secureStorage.getItem(SECURE_KEY_TOKEN);
       const savedUser = await secureStorage.getObject<User>(SECURE_KEY_USER);
+
 
       if (sessionToken && savedUser && savedUser.id) {
         setUser(savedUser);
@@ -97,6 +108,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
+
   /**
    * LOGIN SEBAGAI MAHASISWA (Prioritas 2)
    */
@@ -105,6 +117,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     pass: string
   ): Promise<{ success: boolean; message?: string }> => {
     const trimmed = identifier.trim().toLowerCase();
+
 
     if (!trimmed) {
       return { success: false, message: 'NIM atau Email Kampus wajib diisi.' };
@@ -115,6 +128,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (pass.length < 4) {
       return { success: false, message: 'Password minimal 4 karakter.' };
     }
+
 
     // Buat objek sesi mahasiswa
     const studentUser: User = {
@@ -128,16 +142,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       photo: DEFAULT_STUDENT.photo,
     };
 
+
     const token = `token_mhs_${Date.now()}_${Math.random().toString(36).substring(7)}`;
+
 
     // Simpan ke SecureStore
     await secureStorage.setItem(SECURE_KEY_TOKEN, token);
     await secureStorage.setObject(SECURE_KEY_USER, studentUser);
     await secureStorage.setItem(SECURE_KEY_ROLE, 'student');
 
+
     setUser(studentUser);
     return { success: true };
   };
+
 
   /**
    * LOGIN SEBAGAI ADMIN / PETUGAS (Prioritas 2 & 13)
@@ -151,6 +169,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const currentAdminEmail = adminProfile.email.trim().toLowerCase();
     const currentAdminPass = adminProfile.password || DEFAULT_ADMIN.password;
 
+
     if (!trimmedEmail) {
       return { success: false, message: 'Email akun Gmail petugas wajib diisi.' };
     }
@@ -161,10 +180,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       return { success: false, message: 'Password akun admin wajib diisi.' };
     }
 
+
     // Verifikasi kredensial
     const isMatched =
       (trimmedEmail === currentAdminEmail || trimmedEmail === 'admin.kampus@gmail.com') &&
       (pass === currentAdminPass || pass === 'admin123kampus');
+
 
     if (!isMatched) {
       return {
@@ -172,6 +193,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         message: 'Akun Gmail atau password salah. Silakan periksa kembali kredensial petugas.',
       };
     }
+
 
     const adminUser: User = {
       id: 'admin-1',
@@ -182,30 +204,53 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       photo: adminProfile.avatarUri,
     };
 
+
     const token = `token_admin_${Date.now()}_${Math.random().toString(36).substring(7)}`;
+
 
     // Simpan ke SecureStore
     await secureStorage.setItem(SECURE_KEY_TOKEN, token);
     await secureStorage.setObject(SECURE_KEY_USER, adminUser);
     await secureStorage.setItem(SECURE_KEY_ROLE, 'admin');
 
+
     setUser(adminUser);
     return { success: true };
   };
 
+
   /**
    * Login fleksibel dengan auto-deteksi role
+   * Admin dikenal dari email yang cocok dengan akun admin yang tersimpan
    */
   const login = async (
     emailOrNim: string,
     pass: string,
     preferredRole?: UserRole
   ): Promise<{ success: boolean; message?: string }> => {
-    if (preferredRole === 'admin' || emailOrNim.toLowerCase().includes('admin')) {
+    if (preferredRole === 'admin') {
       return await loginAsAdmin(emailOrNim, pass);
     }
+
+
+    // Auto-detect: jika email cocok dengan email admin, login sebagai admin
+    const trimmed = emailOrNim.trim().toLowerCase();
+    const currentAdminEmail = adminProfile.email.trim().toLowerCase();
+    const isAdminEmail =
+      trimmed === currentAdminEmail ||
+      trimmed === 'admin.kampus@gmail.com';
+
+
+    if (isAdminEmail) {
+      return await loginAsAdmin(emailOrNim, pass);
+    }
+
+
     return await loginAsStudent(emailOrNim, pass);
   };
+
+
+
 
   /**
    * LOGOUT
@@ -223,6 +268,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
+
   /**
    * Update Profil Petugas / Admin
    */
@@ -235,6 +281,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         ...updated,
       };
 
+
       if (!merged.name.trim()) {
         return { success: false, message: 'Nama petugas tidak boleh kosong.' };
       }
@@ -242,8 +289,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         return { success: false, message: 'Email akun Gmail tidak valid.' };
       }
 
+
       setAdminProfile(merged);
       await secureStorage.setObject(SECURE_KEY_ADMIN_PROFILE, merged);
+
 
       // Sinkronkan juga ke active user jika sedang login sebagai admin
       if (user && user.role === 'admin') {
@@ -258,11 +307,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         await secureStorage.setObject(SECURE_KEY_USER, updatedUser);
       }
 
+
       return { success: true, message: 'Profil admin berhasil diperbarui!' };
     } catch {
       return { success: false, message: 'Gagal menyimpan perubahan profil admin.' };
     }
   };
+
 
   /**
    * Update Profil Mahasiswa
@@ -273,10 +324,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       if (!user) return { success: false, message: 'Belum ada user yang login.' };
 
+
       const merged: User = {
         ...user,
         ...updated,
       };
+
 
       setUser(merged);
       await secureStorage.setObject(SECURE_KEY_USER, merged);
@@ -286,10 +339,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
+
   const role = user ? user.role : null;
   const isAuthenticated = !!user;
   const isAdmin = role === 'admin';
   const isStudent = role === 'student';
+
 
   return (
     <AuthContext.Provider
@@ -315,6 +370,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   );
 };
 
+
 export const useAuth = () => {
   const context = useContext(AuthContext);
   if (!context) {
@@ -322,3 +378,5 @@ export const useAuth = () => {
   }
   return context;
 };
+
+

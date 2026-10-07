@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import React, { useState } from 'react';
+import { useEffect, useState } from 'react'; // <-- Tambahkan useEffect di sini
 import {
   FlatList,
   Platform,
@@ -15,7 +15,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ItemCard } from '@/components/ItemCard';
 import { StudentBottomNav } from '@/components/StudentBottomNav';
-import { CAMPUS_CATEGORIES, CAMPUS_FACULTIES } from '@/constants/initialData';
+import { CAMPUS_CATEGORIES } from '@/constants/initialData';
 import { useCampusData } from '@/context/CampusDataContext';
 
 import { useAuth } from '@/context/AuthContext';
