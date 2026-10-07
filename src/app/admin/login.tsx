@@ -193,20 +193,20 @@ export default function AdminLoginScreen() {
             )}
           </TouchableOpacity>
 
-          {/* Demo Helper Card */}
+          {/* Info Akun */}
           <View style={styles.demoCard}>
             <View style={styles.demoHeader}>
               <Ionicons name="information-circle" size={16} color="#4F46E5" />
-              <Text style={styles.demoTitle}>Akun Petugas Demo / Default:</Text>
+              <Text style={styles.demoTitle}>Akun Petugas:</Text>
             </View>
             <Text style={styles.demoCreds}>
               Gmail: <Text style={styles.demoCredsBold}>{adminProfile.email}</Text>
             </Text>
-            <Text style={styles.demoCreds}>
+            <Text style={[styles.demoCreds, { marginTop: 4, color: '#64748B' }]}>
               Password: <Text style={styles.demoCredsBold}>{adminProfile.password || 'admin123kampus'}</Text>
             </Text>
             <TouchableOpacity style={styles.fillDemoBtn} onPress={handleFillDemo}>
-              <Text style={styles.fillDemoBtnText}>Otomatis Isi Akun Demo</Text>
+              <Text style={styles.fillDemoBtnText}>Isi Akun Demo Otomatis</Text>
             </TouchableOpacity>
           </View>
         </View>

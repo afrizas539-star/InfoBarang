@@ -2,7 +2,6 @@ import { Platform } from 'react-native';
 
 import { localStorage } from '../storage/localStorage';
 
-import { INITIAL_CAMPUS_ITEMS, INITIAL_CLAIMS } from '@/constants/initialData';
 import { CampusItem, ClaimRequest, ClaimStatus, ItemStatus, LostItem, FoundItem } from '@/types';
 
 /**
@@ -32,8 +31,8 @@ class SharedDatabaseService {
   private listeners: Set<DatabaseChangeListener> = new Set();
   private pollInterval: any = null;
   private cachedState: DatabaseState = {
-    items: INITIAL_CAMPUS_ITEMS,
-    claims: INITIAL_CLAIMS,
+    items: [], // Data barang diambil dari Firestore, bukan initialData
+    claims: [], // Data klaim diambil dari Firestore, bukan initialData
     lastSyncedAt: new Date().toISOString(),
   };
 

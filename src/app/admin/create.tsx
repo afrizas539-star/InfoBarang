@@ -17,7 +17,7 @@ import {
 import { AdminBottomNav } from '@/components/AdminBottomNav';
 import { AdminHeader } from '@/components/AdminHeader';
 import { ImagePickerButton } from '@/components/ImagePickerButton';
-import { CAMPUS_CATEGORIES, CAMPUS_FACULTIES } from '@/constants/initialData';
+import { CAMPUS_CATEGORIES } from '@/constants/initialData';
 import { useAuth } from '@/context/AuthContext';
 import { useCampusData } from '@/context/CampusDataContext';
 import { ItemType } from '@/types';
@@ -39,7 +39,7 @@ export default function AdminCreateReportScreen() {
   const [category, setCategory] = useState(CAMPUS_CATEGORIES[1]); // default 'KTM & Kartu'
   const [type, setType] = useState<ItemType>('found'); // default 'found'
   const [location, setLocation] = useState('');
-  const [faculty, setFaculty] = useState(CAMPUS_FACULTIES[1]);
+  const [faculty, setFaculty] = useState('');
   const [date, setDate] = useState('Hari ini • ' + new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }) + ' WIB');
   const [description, setDescription] = useState('');
   const [reporter, setReporter] = useState(adminProfile.name);
@@ -238,39 +238,19 @@ export default function AdminCreateReportScreen() {
             />
           </View>
 
-          {/* Lingkup Fakultas */}
+          {/* Lingkup Fakultas / Unit (Opsional) */}
           <View style={styles.inputGroup}>
             <Text style={styles.label}>
-              Lingkup Fakultas / Unit <Text style={styles.req}>*</Text>
+              Lingkup Fakultas / Unit{' '}
+              <Text style={{ fontSize: 11, color: '#64748B', fontWeight: '400' }}>(Opsional)</Text>
             </Text>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-              <View style={styles.catPillRow}>
-                {CAMPUS_FACULTIES.filter((f) => f !== 'Semua Fakultas').map(
-                  (fac) => {
-                    const isSelected = faculty === fac;
-                    return (
-                      <TouchableOpacity
-                        key={fac}
-                        style={[
-                          styles.catPill,
-                          isSelected && styles.catPillActive,
-                        ]}
-                        onPress={() => setFaculty(fac)}
-                      >
-                        <Text
-                          style={[
-                            styles.catPillText,
-                            isSelected && styles.catPillTextActive,
-                          ]}
-                        >
-                          {fac}
-                        </Text>
-                      </TouchableOpacity>
-                    );
-                  }
-                )}
-              </View>
-            </ScrollView>
+            <TextInput
+              style={styles.input}
+              placeholder="Contoh: Fakultas Teknik, Perpustakaan Pusat"
+              placeholderTextColor="#94A3B8"
+              value={faculty}
+              onChangeText={setFaculty}
+            />
           </View>
 
           {/* Tanggal & Waktu */}

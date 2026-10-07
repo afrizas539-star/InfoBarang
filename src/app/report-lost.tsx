@@ -16,7 +16,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ImagePickerButton } from '@/components/ImagePickerButton';
-import { CAMPUS_CATEGORIES, CAMPUS_FACULTIES } from '@/constants/initialData';
+import { CAMPUS_CATEGORIES } from '@/constants/initialData';
 import { useAuth } from '@/context/AuthContext';
 import { useCampusData } from '@/context/CampusDataContext';
 
@@ -39,7 +39,7 @@ export default function StudentReportLostScreen() {
   const [title, setTitle] = useState('');
   const [category, setCategory] = useState(CAMPUS_CATEGORIES[1]); // default 'KTM & Kartu'
   const [location, setLocation] = useState('');
-  const [faculty, setFaculty] = useState(user?.faculty || CAMPUS_FACULTIES[1]);
+  const [faculty, setFaculty] = useState('');
   const [date, setDate] = useState(
     'Hari ini • ' +
       new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }) +
@@ -222,31 +222,19 @@ export default function StudentReportLostScreen() {
             />
           </View>
 
-          {/* Fakultas / Area */}
+          {/* Fakultas / Area Gedung (Opsional) */}
           <View style={styles.inputGroup}>
-            <Text style={styles.label}>Fakultas / Area Gedung</Text>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipScroll}>
-              {CAMPUS_FACULTIES.filter((f) => f !== 'Semua Fakultas').map((fac) => {
-                const isSelected = faculty === fac;
-                return (
-                  <TouchableOpacity
-                    key={fac}
-                    style={[styles.categoryChip, isSelected && styles.categoryChipSelected]}
-                    onPress={() => setFaculty(fac)}
-                    activeOpacity={0.7}
-                  >
-                    <Text
-                      style={[
-                        styles.categoryChipText,
-                        isSelected && styles.categoryChipTextSelected,
-                      ]}
-                    >
-                      {fac}
-                    </Text>
-                  </TouchableOpacity>
-                );
-              })}
-            </ScrollView>
+            <Text style={styles.label}>
+              Fakultas / Area Gedung{' '}
+              <Text style={{ fontSize: 11, color: '#64748B', fontWeight: '400' }}>(Opsional)</Text>
+            </Text>
+            <TextInput
+              style={styles.input}
+              placeholder="Contoh: Fakultas Teknik, Kantin Pusat"
+              placeholderTextColor="#94A3B8"
+              value={faculty}
+              onChangeText={setFaculty}
+            />
           </View>
 
           {/* Tanggal & Waktu */}

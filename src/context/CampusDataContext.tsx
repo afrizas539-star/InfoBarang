@@ -1,6 +1,5 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 
-import { sharedDatabase } from '@/services/database/sharedDatabase';
 import { campusRepository } from '@/services/repository/campusRepository';
 import { CampusItem, ClaimRequest, ItemStatus } from '@/types';
 
@@ -77,18 +76,16 @@ export const CampusDataProvider: React.FC<{ children: React.ReactNode }> = ({ ch
   const [isBackendConnected, setIsBackendConnected] = useState<boolean>(false);
 
   useEffect(() => {
-    // 1. Subscribe ke Shared Database
+    // Subscribe ke Firestore realtime via campusRepository
     const unsubscribe = campusRepository.subscribe((state) => {
       setItems(state.items);
       setClaims(state.claims);
-      setIsBackendConnected(sharedDatabase.isBackendConnected());
       setIsLoading(false);
     });
 
-    // 2. Jalankan sync awal
+    // Jalankan fetch awal dari Firestore
     campusRepository.refreshData().finally(() => {
       setIsLoading(false);
-      setIsBackendConnected(sharedDatabase.isBackendConnected());
     });
 
     return () => {
@@ -177,7 +174,6 @@ export const CampusDataProvider: React.FC<{ children: React.ReactNode }> = ({ ch
   const refreshData = async () => {
     setIsLoading(true);
     await campusRepository.refreshData();
-    setIsBackendConnected(sharedDatabase.isBackendConnected());
     setIsLoading(false);
   };
 

@@ -1,5 +1,15 @@
-import { STATUS_COLORS } from '@/constants/initialData';
-import { sharedDatabase } from '@/services/database/sharedDatabase';
+﻿import { STATUS_COLORS } from '@/constants/initialData';
+import {
+  addClaimToFirestore,
+  addItemToFirestore,
+  deleteItemFromFirestore,
+  getAllClaimsFromFirestore,
+  getAllItemsFromFirestore,
+  subscribeToClaims,
+  subscribeToItems,
+  updateClaimInFirestore,
+  updateItemInFirestore,
+} from '@/services/firebase/firestoreService';
 import {
   CampusItem,
   ClaimRequest,
@@ -11,59 +21,84 @@ import {
 } from '@/types';
 
 /**
- * CampusRepository
- * Repository Pattern untuk mengelola seluruh transaksi data:
- * - Barang Hilang (Lapor, Verifikasi, Status: DALAM PENCARIAN / BARANG DITEMUKAN / SELESAI)
- * - Barang Temuan (Input Petugas, Status: TERSEDIA / DIAMBIL / SELESAI)
- * - Penghubung Barang Hilang & Temuan (Prioritas 9 & 11)
- * - Proses Klaim Berjenjang dengan Verifikasi Dokumen KTM/KTP (Prioritas 10 & 12)
- * - Sinkronisasi Database Bersama (Prioritas 4 & 5)
+ * CampusRepository — Firebase Firestore Edition
+ *
+ * Semua operasi data barang (items) dan klaim (claims) kini diarahkan
+ * langsung ke Firebase Firestore. sharedDatabase/backend HTTP tidak lagi digunakan.
  */
 
+// State lokal (cache) yang diperbarui via realtime listener
+let _items: CampusItem[] = [];
+let _claims: ClaimRequest[] = [];
+let _listeners: Array<(state: { items: CampusItem[]; claims: ClaimRequest[] }) => void> = [];
+
+function _notifyListeners() {
+  const state = { items: _items, claims: _claims };
+  _listeners.forEach((fn) => {
+    try {
+      fn(state);
+    } catch (err) {
+      console.warn('[CampusRepository] Listener error:', err);
+    }
+  });
+}
+
+// Inisialisasi realtime listener ke Firestore
+let _unsubItems: (() => void) | null = null;
+let _unsubClaims: (() => void) | null = null;
+
+function _ensureListeners() {
+  if (_unsubItems) return; // sudah berjalan
+
+  _unsubItems = subscribeToItems((items) => {
+    _items = items;
+    _notifyListeners();
+  });
+
+  _unsubClaims = subscribeToClaims((claims) => {
+    _claims = claims;
+    _notifyListeners();
+  });
+}
+
 class CampusRepository {
-  /**
-   * Mengambil semua item
-   */
-  async getAllItems(): Promise<CampusItem[]> {
-    return sharedDatabase.getState().items;
+  constructor() {
+    _ensureListeners();
   }
 
-  /**
-   * Mengambil katalog publik kampus
-   * - Barang temuan yang aktif (TERSEDIA / Menunggu Klaim)
-   * - Barang hilang yang TELAH DIVERIFIKASI / DISETUJUI oleh Admin
-   */
+  // ─── READ ──────────────────────────────────────────────────────────────────
+
+  async getAllItems(): Promise<CampusItem[]> {
+    if (_items.length > 0) return _items;
+    _items = await getAllItemsFromFirestore();
+    return _items;
+  }
+
   async getPublicCatalog(): Promise<CampusItem[]> {
     const all = await this.getAllItems();
     return all.filter((item) => {
-      if (item.type === 'found') {
-        return true; // Barang temuan petugas tampil di katalog
-      }
-      // Barang hilang hanya tampil jika disetujui / terverifikasi oleh Admin
+      if (item.type === 'found') return true;
       return item.verificationStatus === 'Disetujui' || !item.verificationStatus;
     });
   }
 
-  /**
-   * Mengambil daftar laporan kehilangan khusus admin (termasuk yang menunggu verifikasi)
-   */
   async getLostReports(): Promise<CampusItem[]> {
     const all = await this.getAllItems();
     return all.filter((item) => item.type === 'lost');
   }
 
-  /**
-   * Mengambil laporan kehilangan milik mahasiswa tertentu
-   */
   async getStudentLostReports(userId: string): Promise<CampusItem[]> {
     const all = await this.getAllItems();
     return all.filter((item) => item.type === 'lost' && item.userId === userId);
   }
 
+  // ─── BARANG HILANG (LAPORAN MAHASISWA) ────────────────────────────────────
+
   /**
    * FITUR MAHASISWA: Lapor Barang Hilang (Prioritas 6)
    * Status awal: 'Menunggu Verifikasi'
    * Status barang: 'DALAM PENCARIAN'
+   * Disimpan ke Firestore koleksi `items`.
    */
   async reportLostItem(data: {
     title: string;
@@ -77,14 +112,13 @@ class CampusRepository {
     reporter: string;
     faculty?: string;
   }): Promise<CampusItem> {
-    const newItem: CampusItem = {
-      id: `lost-${Date.now()}`,
+    const itemData: Omit<CampusItem, 'id'> = {
       title: data.title.trim(),
       category: data.category,
       type: 'lost',
       status: 'DALAM PENCARIAN',
       lostStatus: 'DALAM PENCARIAN',
-      verificationStatus: 'Menunggu Verifikasi', // Menunggu diverifikasi admin
+      verificationStatus: 'Menunggu Verifikasi',
       statusColor: STATUS_COLORS['DALAM PENCARIAN']?.text || '#B91C1C',
       date: data.date.trim() || 'Hari ini',
       location: data.location.trim(),
@@ -100,11 +134,12 @@ class CampusRepository {
       createdAt: new Date().toISOString(),
     };
 
-    const currentItems = sharedDatabase.getState().items;
-    const updated = [newItem, ...currentItems];
-    await sharedDatabase.syncPush({ items: updated });
+    // addDoc ke Firestore — ID digenerate otomatis
+    const newItem = await addItemToFirestore(itemData);
     return newItem;
   }
+
+  // ─── VERIFIKASI LAPORAN (ADMIN) ───────────────────────────────────────────
 
   /**
    * VERIFIKASI LAPORAN KEHILANGAN OLEH ADMIN (Prioritas 7)
@@ -114,32 +149,29 @@ class CampusRepository {
     approved: boolean,
     adminNotes?: string
   ): Promise<{ success: boolean; message: string }> {
-    const currentItems = sharedDatabase.getState().items;
-    const target = currentItems.find((i) => i.id === itemId);
+    const newVerificationStatus: VerificationStatus = approved ? 'Disetujui' : 'Ditolak';
+    const newStatus: ItemStatus = approved ? 'DALAM PENCARIAN' : ('Ditolak' as ItemStatus);
 
+    const target = _items.find((i) => i.id === itemId);
     if (!target) {
       return { success: false, message: 'Laporan barang hilang tidak ditemukan.' };
     }
 
-    const newVerificationStatus: VerificationStatus = approved ? 'Disetujui' : 'Ditolak';
-    const updated = currentItems.map((item) => {
-      if (item.id === itemId) {
-        return {
-          ...item,
-          verificationStatus: newVerificationStatus,
-          status: (approved ? 'DALAM PENCARIAN' : 'Ditolak') as ItemStatus,
-          statusColor: approved
-            ? STATUS_COLORS['DALAM PENCARIAN'].text
-            : STATUS_COLORS['Ditolak'].text,
-          additionalInfo: adminNotes
-            ? `${item.additionalInfo ? item.additionalInfo + ' | ' : ''}Catatan Admin: ${adminNotes}`
-            : item.additionalInfo,
-        };
-      }
-      return item;
-    });
+    const updatedFields: Partial<CampusItem> = {
+      verificationStatus: newVerificationStatus,
+      status: newStatus,
+      statusColor: approved
+        ? STATUS_COLORS['DALAM PENCARIAN'].text
+        : STATUS_COLORS['Ditolak'].text,
+    };
 
-    await sharedDatabase.syncPush({ items: updated });
+    if (adminNotes) {
+      updatedFields.additionalInfo = target.additionalInfo
+        ? `${target.additionalInfo} | Catatan Admin: ${adminNotes}`
+        : `Catatan Admin: ${adminNotes}`;
+    }
+
+    await updateItemInFirestore(itemId, updatedFields);
     return {
       success: true,
       message: approved
@@ -148,9 +180,12 @@ class CampusRepository {
     };
   }
 
+  // ─── BARANG TEMUAN (INPUT ADMIN/PETUGAS) ─────────────────────────────────
+
   /**
    * INPUT BARANG TEMUAN OLEH ADMIN/PETUGAS (Prioritas 8 & 14)
    * Status: 'TERSEDIA'
+   * Disimpan ke Firestore koleksi `items`.
    */
   async addFoundItem(data: {
     title: string;
@@ -162,8 +197,7 @@ class CampusRepository {
     reporter: string;
     faculty?: string;
   }): Promise<CampusItem> {
-    const newItem: CampusItem = {
-      id: `found-${Date.now()}`,
+    const itemData: Omit<CampusItem, 'id'> = {
       title: data.title.trim(),
       category: data.category,
       type: 'found',
@@ -182,114 +216,95 @@ class CampusRepository {
       createdAt: new Date().toISOString(),
     };
 
-    const currentItems = sharedDatabase.getState().items;
-    const updated = [newItem, ...currentItems];
-    await sharedDatabase.syncPush({ items: updated });
+    // addDoc ke Firestore — ID digenerate otomatis
+    const newItem = await addItemToFirestore(itemData);
     return newItem;
   }
 
+  // ─── HUBUNGKAN BARANG ─────────────────────────────────────────────────────
+
   /**
    * HUBUNGKAN BARANG HILANG DENGAN BARANG TEMUAN (Prioritas 9 & 11)
-   * Menghubungkan lostItemId dengan foundItemId.
-   * Status barang hilang berubah menjadi 'BARANG DITEMUKAN'.
    */
   async linkLostWithFound(
     lostItemId: string,
     foundItemId: string
   ): Promise<{ success: boolean; message: string }> {
-    const currentItems = sharedDatabase.getState().items;
-    const lostItem = currentItems.find((i) => i.id === lostItemId);
-    const foundItem = currentItems.find((i) => i.id === foundItemId);
+    const lostItem = _items.find((i) => i.id === lostItemId);
+    const foundItem = _items.find((i) => i.id === foundItemId);
 
     if (!lostItem || !foundItem) {
       return { success: false, message: 'Data barang hilang atau temuan tidak ditemukan.' };
     }
 
-    const updated = currentItems.map((item) => {
-      if (item.id === lostItemId) {
-        return {
-          ...item,
-          status: 'BARANG DITEMUKAN' as ItemStatus,
-          lostStatus: 'BARANG DITEMUKAN' as LostItemStatus,
-          statusColor: STATUS_COLORS['BARANG DITEMUKAN'].text,
-          foundItemId: foundItemId,
-        };
-      }
-      if (item.id === foundItemId) {
-        return {
-          ...item,
-          linkedLostItemId: lostItemId,
-        };
-      }
-      return item;
+    await updateItemInFirestore(lostItemId, {
+      status: 'BARANG DITEMUKAN' as ItemStatus,
+      lostStatus: 'BARANG DITEMUKAN' as LostItemStatus,
+      statusColor: STATUS_COLORS['BARANG DITEMUKAN'].text,
+      foundItemId: foundItemId,
     });
 
-    await sharedDatabase.syncPush({ items: updated });
+    await updateItemInFirestore(foundItemId, {
+      linkedLostItemId: lostItemId,
+    });
+
     return {
       success: true,
       message: `Berhasil menghubungkan! Laporan "${lostItem.title}" kini berstatus BARANG DITEMUKAN.`,
     };
   }
 
-  /**
-   * Mengubah status barang secara manual (Admin)
-   */
+  // ─── UPDATE STATUS ────────────────────────────────────────────────────────
+
   async updateItemStatus(itemId: string, newStatus: ItemStatus): Promise<void> {
-    const currentItems = sharedDatabase.getState().items;
-    const updated = currentItems.map((item) => {
-      if (item.id === itemId) {
-        const next: CampusItem = {
-          ...item,
-          status: newStatus,
-          statusColor: STATUS_COLORS[newStatus]?.text || item.statusColor,
-        };
-        if (item.type === 'lost') {
-          if (newStatus === 'DALAM PENCARIAN' || newStatus === 'BARANG DITEMUKAN' || newStatus === 'SELESAI') {
-            next.lostStatus = newStatus as LostItemStatus;
-          }
-        } else {
-          if (newStatus === 'TERSEDIA' || newStatus === 'DIAMBIL / SELESAI' || newStatus === 'SELESAI') {
-            next.foundStatus = (newStatus === 'SELESAI' ? 'DIAMBIL / SELESAI' : newStatus) as FoundItemStatus;
-          }
+    const item = _items.find((i) => i.id === itemId);
+    const updatedFields: Partial<CampusItem> = {
+      status: newStatus,
+      statusColor: STATUS_COLORS[newStatus]?.text || '#334155',
+    };
+
+    if (item) {
+      if (item.type === 'lost') {
+        if (
+          newStatus === 'DALAM PENCARIAN' ||
+          newStatus === 'BARANG DITEMUKAN' ||
+          newStatus === 'SELESAI'
+        ) {
+          updatedFields.lostStatus = newStatus as LostItemStatus;
         }
-        return next;
+      } else {
+        if (
+          newStatus === 'TERSEDIA' ||
+          newStatus === 'DIAMBIL / SELESAI' ||
+          newStatus === 'SELESAI'
+        ) {
+          updatedFields.foundStatus = (
+            newStatus === 'SELESAI' ? 'DIAMBIL / SELESAI' : newStatus
+          ) as FoundItemStatus;
+        }
       }
-      return item;
-    });
-    await sharedDatabase.syncPush({ items: updated });
+    }
+
+    await updateItemInFirestore(itemId, updatedFields);
   }
 
-  /**
-   * Update item fields
-   */
   async updateItem(itemId: string, updatedFields: Partial<CampusItem>): Promise<void> {
-    const currentItems = sharedDatabase.getState().items;
-    const updated = currentItems.map((item) => {
-      if (item.id === itemId) {
-        const next = { ...item, ...updatedFields };
-        if (updatedFields.status) {
-          next.statusColor = STATUS_COLORS[updatedFields.status]?.text || next.statusColor;
-        }
-        return next;
-      }
-      return item;
-    });
-    await sharedDatabase.syncPush({ items: updated });
+    const extra: Partial<CampusItem> = {};
+    if (updatedFields.status) {
+      extra.statusColor = STATUS_COLORS[updatedFields.status]?.text || '#334155';
+    }
+    await updateItemInFirestore(itemId, { ...updatedFields, ...extra });
   }
 
-  /**
-   * Hapus item
-   */
   async deleteItem(itemId: string): Promise<void> {
-    const currentItems = sharedDatabase.getState().items;
-    const updated = currentItems.filter((i) => i.id !== itemId);
-    await sharedDatabase.syncPush({ items: updated });
+    await deleteItemFromFirestore(itemId);
   }
+
+  // ─── KLAIM ────────────────────────────────────────────────────────────────
 
   /**
    * PROSES KLAIM OLEH MAHASISWA (Prioritas 10 & 12)
-   * Menyimpan klaim dengan lampiran sensitif foto KTM/KTP.
-   * Status klaim awal: 'Menunggu Verifikasi' (Tidak boleh auto-claim!)
+   * Disimpan ke Firestore koleksi `claims`.
    */
   async submitClaim(claimData: {
     itemId: string;
@@ -302,12 +317,11 @@ class CampusRepository {
     studentFaculty: string;
     studentPhone: string;
     proofDetails: string;
-    idCardImage: string; // FOTO KTM/KTP
+    idCardImage: string;
   }): Promise<{ success: boolean; claimId?: string; message?: string }> {
     try {
-      const newClaim: ClaimRequest = {
+      const newClaimData: Omit<ClaimRequest, 'id'> = {
         ...claimData,
-        id: `claim-${Date.now()}`,
         status: 'Menunggu Verifikasi',
         createdAt:
           'Hari ini • ' +
@@ -315,13 +329,10 @@ class CampusRepository {
           ' WIB',
       };
 
-      const currentClaims = sharedDatabase.getState().claims;
-      const updatedClaims = [newClaim, ...currentClaims];
+      const newClaim = await addClaimToFirestore(newClaimData);
 
-      // Update status item terkait menjadi 'Proses Klaim'
+      // Update status item menjadi 'Proses Klaim'
       await this.updateItemStatus(claimData.itemId, 'Proses Klaim');
-
-      await sharedDatabase.syncPush({ claims: updatedClaims });
 
       return {
         success: true,
@@ -329,7 +340,8 @@ class CampusRepository {
         message:
           'Pengajuan klaim berhasil dikirim! Petugas keamanan akan memverifikasi dokumen KTM/KTP Anda.',
       };
-    } catch {
+    } catch (err) {
+      console.error('[CampusRepository] submitClaim error:', err);
       return { success: false, message: 'Gagal mengajukan klaim. Silakan coba kembali.' };
     }
   }
@@ -344,42 +356,30 @@ class CampusRepository {
     adminName?: string
   ): Promise<{ success: boolean; message?: string }> {
     try {
-      const currentClaims = sharedDatabase.getState().claims;
-      const targetClaim = currentClaims.find((c) => c.id === claimId);
-
+      const targetClaim = _claims.find((c) => c.id === claimId);
       if (!targetClaim) {
         return { success: false, message: 'Klaim tidak ditemukan.' };
       }
 
       const newClaimStatus: ClaimStatus = approved ? 'Terverifikasi' : 'Klaim Ditolak';
-      const updatedClaims = currentClaims.map((c) => {
-        if (c.id === claimId) {
-          return {
-            ...c,
-            status: newClaimStatus,
-            adminNotes:
-              adminNotes ||
-              (approved
-                ? 'Klaim disetujui. Identitas KTM/KTP cocok.'
-                : 'Bukti identitas atau deskripsi barang tidak cocok.'),
-            verifiedAt:
-              new Date().toLocaleDateString('id-ID') +
-              ' • ' +
-              new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }) +
-              ' WIB',
-            verifiedBy: adminName || 'Petugas Keamanan Kampus',
-          };
-        }
-        return c;
+      await updateClaimInFirestore(claimId, {
+        status: newClaimStatus,
+        adminNotes:
+          adminNotes ||
+          (approved
+            ? 'Klaim disetujui. Identitas KTM/KTP cocok.'
+            : 'Bukti identitas atau deskripsi barang tidak cocok.'),
+        verifiedAt:
+          new Date().toLocaleDateString('id-ID') +
+          ' • ' +
+          new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }) +
+          ' WIB',
+        verifiedBy: adminName || 'Petugas Keamanan Kampus',
       });
 
-      await sharedDatabase.syncPush({ claims: updatedClaims });
-
-      // Jika disetujui, ubah status barang temuan menjadi 'DIAMBIL / SELESAI'
       if (approved) {
         await this.updateItemStatus(targetClaim.itemId, 'DIAMBIL / SELESAI');
       } else {
-        // Jika ditolak, kembalikan status barang temuan ke 'TERSEDIA'
         await this.updateItemStatus(targetClaim.itemId, 'TERSEDIA');
       }
 
@@ -389,20 +389,30 @@ class CampusRepository {
           ? 'Klaim disetujui! Barang siap diserahkan kepada mahasiswa.'
           : 'Klaim ditolak.',
       };
-    } catch {
+    } catch (err) {
+      console.error('[CampusRepository] verifyClaim error:', err);
       return { success: false, message: 'Gagal memproses verifikasi klaim.' };
     }
   }
 
+  // ─── SUBSCRIBE & REFRESH ──────────────────────────────────────────────────
+
   /**
-   * Subscribe ke perubahan database realtime
+   * Subscribe ke perubahan realtime (via Firestore onSnapshot).
    */
-  subscribe(listener: (state: import('../database/sharedDatabase').DatabaseState) => void) {
-    return sharedDatabase.subscribe(listener);
+  subscribe(listener: (state: { items: CampusItem[]; claims: ClaimRequest[] }) => void) {
+    _listeners.push(listener);
+    // Kirim state saat ini segera
+    listener({ items: _items, claims: _claims });
+    return () => {
+      _listeners = _listeners.filter((fn) => fn !== listener);
+    };
   }
 
   async refreshData() {
-    await sharedDatabase.pullFromBackend();
+    _items = await getAllItemsFromFirestore();
+    _claims = await getAllClaimsFromFirestore();
+    _notifyListeners();
   }
 }
 

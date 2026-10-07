@@ -1,9 +1,11 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 
-
+import {
+  DEFAULT_ADMIN_DATA,
+  getAdminByEmailFromFirestore,
+} from '@/services/firebase/firestoreService';
 import { secureStorage } from '@/services/storage/secureStorage';
 import { AdminProfile, User, UserRole } from '@/types';
-
 
 interface AuthContextType {
   user: User | null;
@@ -36,17 +38,7 @@ interface AuthContextType {
   ) => Promise<{ success: boolean; message?: string }>;
 }
 
-
-const DEFAULT_ADMIN: AdminProfile = {
-  name: 'Budi Santoso, S.Sos',
-  email: 'admin.kampus@gmail.com',
-  password: 'admin123kampus',
-  phone: '081298765432',
-  avatarUri: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?q=80&w=400&auto=format&fit=crop',
-  role: 'Petugas Pengelola Lost & Found Kampus',
-  officeLocation: 'Posko Keamanan Pusat (Gedung Rektorat Lt. 1)',
-};
-
+const DEFAULT_ADMIN: AdminProfile = DEFAULT_ADMIN_DATA;
 
 const DEFAULT_STUDENT: User = {
   id: 'mhs-2210511045',
@@ -59,41 +51,34 @@ const DEFAULT_STUDENT: User = {
   photo: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?q=80&w=400&auto=format&fit=crop',
 };
 
-
 // SecureStore Keys (Terenkripsi, Prioritas 3)
 const SECURE_KEY_TOKEN = 'auth_session_token';
 const SECURE_KEY_USER = 'auth_active_user';
 const SECURE_KEY_ROLE = 'auth_active_role';
 const SECURE_KEY_ADMIN_PROFILE = 'admin_profile_data';
 
-
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
-
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
   const [adminProfile, setAdminProfile] = useState<AdminProfile>(DEFAULT_ADMIN);
   const [isLoadingAuth, setIsLoadingAuth] = useState<boolean>(true);
 
-
   useEffect(() => {
     loadSession();
   }, []);
 
-
   const loadSession = async () => {
     try {
-      // 1. Muat profil admin dari SecureStore
+      // 1. Muat profil admin dari SecureStore jika ada
       const savedAdminProfile = await secureStorage.getObject<AdminProfile>(SECURE_KEY_ADMIN_PROFILE);
       if (savedAdminProfile) {
         setAdminProfile(savedAdminProfile);
       }
 
-
       // 2. Cek token sesi dan data user yang tersimpan
       const sessionToken = await secureStorage.getItem(SECURE_KEY_TOKEN);
       const savedUser = await secureStorage.getObject<User>(SECURE_KEY_USER);
-
 
       if (sessionToken && savedUser && savedUser.id) {
         setUser(savedUser);
@@ -108,7 +93,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-
   /**
    * LOGIN SEBAGAI MAHASISWA (Prioritas 2)
    */
@@ -117,7 +101,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     pass: string
   ): Promise<{ success: boolean; message?: string }> => {
     const trimmed = identifier.trim().toLowerCase();
-
 
     if (!trimmed) {
       return { success: false, message: 'NIM atau Email Kampus wajib diisi.' };
@@ -128,7 +111,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (pass.length < 4) {
       return { success: false, message: 'Password minimal 4 karakter.' };
     }
-
 
     // Buat objek sesi mahasiswa
     const studentUser: User = {
@@ -142,33 +124,26 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       photo: DEFAULT_STUDENT.photo,
     };
 
-
     const token = `token_mhs_${Date.now()}_${Math.random().toString(36).substring(7)}`;
-
 
     // Simpan ke SecureStore
     await secureStorage.setItem(SECURE_KEY_TOKEN, token);
     await secureStorage.setObject(SECURE_KEY_USER, studentUser);
     await secureStorage.setItem(SECURE_KEY_ROLE, 'student');
 
-
     setUser(studentUser);
     return { success: true };
   };
 
-
   /**
-   * LOGIN SEBAGAI ADMIN / PETUGAS (Prioritas 2 & 13)
-   * Wajib akun Gmail dan Password
+   * LOGIN SEBAGAI ADMIN / PETUGAS
+   * Mengambil data akun admin dari koleksi Firestore `admins` (tanpa Firebase Auth).
    */
   const loginAsAdmin = async (
     email: string,
     pass: string
   ): Promise<{ success: boolean; message?: string }> => {
     const trimmedEmail = email.trim().toLowerCase();
-    const currentAdminEmail = adminProfile.email.trim().toLowerCase();
-    const currentAdminPass = adminProfile.password || DEFAULT_ADMIN.password;
-
 
     if (!trimmedEmail) {
       return { success: false, message: 'Email akun Gmail petugas wajib diisi.' };
@@ -180,48 +155,52 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       return { success: false, message: 'Password akun admin wajib diisi.' };
     }
 
+    try {
+      // Ambil data admin dari koleksi Firestore 'admins'
+      const adminData = await getAdminByEmailFromFirestore(trimmedEmail);
 
-    // Verifikasi kredensial
-    const isMatched =
-      (trimmedEmail === currentAdminEmail || trimmedEmail === 'admin.kampus@gmail.com') &&
-      (pass === currentAdminPass || pass === 'admin123kampus');
+      if (!adminData) {
+        return {
+          success: false,
+          message: 'Akun Gmail petugas tidak terdaftar di Firestore. Periksa kembali email Anda.',
+        };
+      }
 
+      // Verifikasi password dari dokumen Firestore
+      if (adminData.password !== pass) {
+        return {
+          success: false,
+          message: 'Password akun admin salah. Silakan coba lagi.',
+        };
+      }
 
-    if (!isMatched) {
-      return {
-        success: false,
-        message: 'Akun Gmail atau password salah. Silakan periksa kembali kredensial petugas.',
+      const adminUser: User = {
+        id: 'admin-1',
+        name: adminData.name,
+        email: adminData.email,
+        role: 'admin',
+        phone: adminData.phone,
+        photo: adminData.avatarUri,
       };
+
+      const token = `token_admin_${Date.now()}_${Math.random().toString(36).substring(7)}`;
+
+      // Simpan ke SecureStore
+      await secureStorage.setItem(SECURE_KEY_TOKEN, token);
+      await secureStorage.setObject(SECURE_KEY_USER, adminUser);
+      await secureStorage.setItem(SECURE_KEY_ROLE, 'admin');
+
+      setAdminProfile(adminData);
+      setUser(adminUser);
+      return { success: true };
+    } catch (err) {
+      console.error('Error login admin via Firestore:', err);
+      return { success: false, message: 'Gagal terhubung ke database Firestore.' };
     }
-
-
-    const adminUser: User = {
-      id: 'admin-1',
-      name: adminProfile.name,
-      email: trimmedEmail,
-      role: 'admin',
-      phone: adminProfile.phone,
-      photo: adminProfile.avatarUri,
-    };
-
-
-    const token = `token_admin_${Date.now()}_${Math.random().toString(36).substring(7)}`;
-
-
-    // Simpan ke SecureStore
-    await secureStorage.setItem(SECURE_KEY_TOKEN, token);
-    await secureStorage.setObject(SECURE_KEY_USER, adminUser);
-    await secureStorage.setItem(SECURE_KEY_ROLE, 'admin');
-
-
-    setUser(adminUser);
-    return { success: true };
   };
-
 
   /**
    * Login fleksibel dengan auto-deteksi role
-   * Admin dikenal dari email yang cocok dengan akun admin yang tersimpan
    */
   const login = async (
     emailOrNim: string,
@@ -232,25 +211,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       return await loginAsAdmin(emailOrNim, pass);
     }
 
-
-    // Auto-detect: jika email cocok dengan email admin, login sebagai admin
     const trimmed = emailOrNim.trim().toLowerCase();
-    const currentAdminEmail = adminProfile.email.trim().toLowerCase();
-    const isAdminEmail =
-      trimmed === currentAdminEmail ||
-      trimmed === 'admin.kampus@gmail.com';
+    const isEmailFormat = trimmed.includes('@') && trimmed.includes('.');
 
-
-    if (isAdminEmail) {
-      return await loginAsAdmin(emailOrNim, pass);
+    if (isEmailFormat) {
+      const adminResult = await loginAsAdmin(emailOrNim, pass);
+      if (adminResult.success) return adminResult;
     }
-
 
     return await loginAsStudent(emailOrNim, pass);
   };
-
-
-
 
   /**
    * LOGOUT
