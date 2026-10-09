@@ -145,7 +145,7 @@ export default function StudentClaimsScreen() {
             <Ionicons name="document-text-outline" size={48} color="#94A3B8" />
             <Text style={styles.emptyTitle}>Belum Ada Pengajuan Klaim</Text>
             <Text style={styles.emptySubtitle}>
-              Jika Anda menemukan barang Anda di katalog kampus, tekan tombol "Klaim Barang Ini" pada halaman detail.
+              Jika Anda menemukan barang yang cocok di katalog kampus, silakan kunjungi Posko Keamanan Kampus dengan membawa KTM aktif untuk verifikasi dan serah terima oleh petugas.
             </Text>
             <TouchableOpacity
               style={styles.browseBtn}

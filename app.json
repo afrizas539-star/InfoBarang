@@ -1,12 +1,17 @@
 {
   "expo": {
-    "name": "project_mobile",
+    "name": "InfoBarang",
     "slug": "project_mobile",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "projectmobile",
     "userInterfaceStyle": "automatic",
+    "splash": {
+      "image": "./assets/images/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#208AEF"
+    },
     "ios": {
       "icon": "./assets/expo.icon"
     },

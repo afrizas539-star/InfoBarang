@@ -13,16 +13,78 @@ import {
 } from 'firebase/firestore';
 
 import { db } from '@/config/firebase';
-import { AdminProfile, CampusItem, ClaimRequest } from '@/types';
+import { AdminProfile, CampusItem, ClaimRequest, User, UserRole } from '@/types';
 
 // Koleksi Firestore
 const ITEMS_COLLECTION = 'items';
 const CLAIMS_COLLECTION = 'claims';
 const ADMINS_COLLECTION = 'admins';
+const USERS_COLLECTION = 'users';
+
+/**
+ * Validasi domain email sesuai kebijakan kampus:
+ * - Mahasiswa: Harus berakhiran tepat @webmail.umm.ac.id
+ * - Petugas: Harus berakhiran tepat @umm.ac.id (dan BUKAN @webmail.umm.ac.id)
+ */
+export function validateEmailDomain(email: string): {
+  isValid: boolean;
+  role: UserRole | null;
+  errorMessage?: string;
+} {
+  const normalized = email.trim().toLowerCase();
+
+  if (!normalized || !normalized.includes('@')) {
+    return {
+      isValid: false,
+      role: null,
+      errorMessage: 'Format email tidak valid. Masukkan email resmi kampus.',
+    };
+  }
+
+  // 1. Mahasiswa: Harus berakhiran tepat @webmail.umm.ac.id
+  if (normalized.endsWith('@webmail.umm.ac.id')) {
+    const prefix = normalized.split('@webmail.umm.ac.id')[0];
+    if (!prefix || prefix.includes('@')) {
+      return {
+        isValid: false,
+        role: null,
+        errorMessage: 'Alamat email mahasiswa tidak valid.',
+      };
+    }
+    return {
+      isValid: true,
+      role: 'student',
+    };
+  }
+
+  // 2. Petugas: Harus berakhiran tepat @umm.ac.id dan bukan @webmail.umm.ac.id
+  if (normalized.endsWith('@umm.ac.id')) {
+    const prefix = normalized.split('@umm.ac.id')[0];
+    if (!prefix || prefix.includes('@')) {
+      return {
+        isValid: false,
+        role: null,
+        errorMessage: 'Alamat email petugas tidak valid.',
+      };
+    }
+    return {
+      isValid: true,
+      role: 'admin',
+    };
+  }
+
+  // 3. Domain di luar UMM ditolak
+  return {
+    isValid: false,
+    role: null,
+    errorMessage:
+      'Domain email tidak diizinkan. Gunakan @webmail.umm.ac.id untuk mahasiswa atau @umm.ac.id untuk petugas.',
+  };
+}
 
 export const DEFAULT_ADMIN_DATA: AdminProfile = {
   name: 'Budi Santoso, S.Sos',
-  email: 'admin.kampus@gmail.com',
+  email: 'petugas@umm.ac.id',
   password: 'admin123kampus',
   phone: '081298765432',
   avatarUri: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?q=80&w=400&auto=format&fit=crop',
@@ -30,23 +92,83 @@ export const DEFAULT_ADMIN_DATA: AdminProfile = {
   officeLocation: 'Posko Keamanan Pusat (Gedung Rektorat Lt. 1)',
 };
 
-// ─── ADMINS ───────────────────────────────────────────────────────────────────
+// ─── ADMINS & USERS ───────────────────────────────────────────────────────────
 
 /**
  * Cari akun admin di Firestore berdasarkan email.
  */
 export async function getAdminByEmailFromFirestore(email: string): Promise<AdminProfile | null> {
   try {
+    const normalized = email.trim().toLowerCase();
     const q = query(
       collection(db, ADMINS_COLLECTION),
-      where('email', '==', email.trim().toLowerCase())
+      where('email', '==', normalized)
     );
     const snapshot = await getDocs(q);
-    if (snapshot.empty) return null;
-    return snapshot.docs[0].data() as AdminProfile;
+    if (!snapshot.empty) {
+      return snapshot.docs[0].data() as AdminProfile;
+    }
+
+    // Periksa juga di koleksi users jika disimpan di users dengan role admin
+    const qUsers = query(
+      collection(db, USERS_COLLECTION),
+      where('email', '==', normalized),
+      where('role', 'in', ['admin', 'Petugas Pengelola Lost & Found Kampus'])
+    );
+    const snapUsers = await getDocs(qUsers);
+    if (!snapUsers.empty) {
+      const uData = snapUsers.docs[0].data();
+      return {
+        name: uData.name || 'Petugas Kampus',
+        email: uData.email,
+        phone: uData.phone || '081234567890',
+        avatarUri: uData.photo || uData.avatarUri || '',
+        role: 'Petugas Pengelola Lost & Found Kampus',
+        officeLocation: uData.officeLocation || 'Posko Keamanan Pusat',
+      };
+    }
+
+    return null;
   } catch (error) {
     console.error('Error fetching admin by email from Firestore:', error);
     return null;
+  }
+}
+
+/**
+ * Cari profil mahasiswa di Firestore (koleksi users).
+ */
+export async function getUserProfileFromFirestore(email: string): Promise<User | null> {
+  try {
+    const normalized = email.trim().toLowerCase();
+    const q = query(
+      collection(db, USERS_COLLECTION),
+      where('email', '==', normalized)
+    );
+    const snapshot = await getDocs(q);
+    if (!snapshot.empty) {
+      const docData = snapshot.docs[0];
+      return { id: docData.id, ...(docData.data() as Omit<User, 'id'>) };
+    }
+    return null;
+  } catch (error) {
+    console.error('Error fetching user profile from Firestore:', error);
+    return null;
+  }
+}
+
+/**
+ * Simpan profil mahasiswa ke Firestore (koleksi users).
+ */
+export async function saveUserProfileToFirestore(user: User): Promise<void> {
+  try {
+    const ref = collection(db, USERS_COLLECTION);
+    await addDoc(ref, {
+      ...user,
+      createdAt: new Date().toISOString(),
+    });
+  } catch (error) {
+    console.warn('Gagal menyimpan profil mahasiswa ke Firestore:', error);
   }
 }
 

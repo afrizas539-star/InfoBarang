@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   Alert,
   Image,
@@ -24,7 +24,7 @@ export default function ClaimItemScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { user } = useAuth();
+  const { user, isAuthenticated, isLoadingAuth, isAdmin } = useAuth();
   const { getItemById, submitClaim } = useCampusData();
 
   const item = getItemById(id as string);
@@ -38,6 +38,46 @@ export default function ClaimItemScreen() {
   const [idCardImage, setIdCardImage] = useState<string>('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  // Guard: redirect jika belum login
+  useEffect(() => {
+    if (!isLoadingAuth && !isAuthenticated) {
+      router.replace('/login');
+    }
+  }, [isAuthenticated, isLoadingAuth]);
+
+  // Guard: Mahasiswa tidak boleh mengakses formulir klaim langsung
+  if (!isLoadingAuth && !isAdmin) {
+    return (
+      <View style={[styles.container, styles.center]}>
+        <View style={styles.noticeIconWrap}>
+          <Ionicons name="shield-checkmark" size={48} color="#2563EB" />
+        </View>
+        <Text style={styles.noticeTitle}>Prosedur Pengambilan Barang</Text>
+        <Text style={styles.noticeText}>
+          Pengambilan barang temuan tidak dilakukan secara mandiri melalui aplikasi, melainkan harus diverifikasi dan ditangani langsung oleh Petugas Keamanan Kampus.
+        </Text>
+        <Text style={styles.noticeSubText}>
+          Silakan kunjungi Posko Keamanan Kampus dengan membawa Kartu Tanda Mahasiswa (KTM) aktif dan menyebutkan ciri khusus barang yang cocok.
+        </Text>
+        <TouchableOpacity
+          style={styles.backBtn}
+          onPress={() => {
+            if (router.canGoBack()) {
+              router.back();
+            } else {
+              router.replace(item ? (`/item/${item.id}` as any) : '/home');
+            }
+          }}
+        >
+          <Ionicons name="arrow-back" size={16} color="#FFFFFF" style={{ marginRight: 6 }} />
+          <Text style={styles.backBtnText}>Kembali ke Detail Barang</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
+
+
+  // Guard: barang tidak ditemukan
   if (!item) {
     return (
       <View style={[styles.container, styles.center]}>
@@ -50,6 +90,15 @@ export default function ClaimItemScreen() {
   }
 
   const handleSubmit = async () => {
+    // Role check: hanya admin/petugas yang berhak memproses formulir klaim
+    if (!isAdmin) {
+      Alert.alert(
+        'Akses Dibatasi',
+        'Pengambilan barang temuan harus ditangani langsung oleh Petugas Keamanan di Posko Kampus.'
+      );
+      return;
+    }
+
     // Form validation
     if (!studentName.trim()) {
       Alert.alert('Form Belum Lengkap', 'Nama lengkap mahasiswa wajib diisi.');
@@ -308,15 +357,52 @@ const styles = StyleSheet.create({
     color: '#64748B',
     marginBottom: 16,
   },
+  noticeIconWrap: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: '#EFF6FF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 20,
+    borderWidth: 1,
+    borderColor: '#BFDBFE',
+  },
+  noticeTitle: {
+    fontSize: 20,
+    fontWeight: '800',
+    color: '#0F172A',
+    marginBottom: 12,
+    textAlign: 'center',
+  },
+  noticeText: {
+    fontSize: 14,
+    color: '#334155',
+    textAlign: 'center',
+    lineHeight: 22,
+    marginBottom: 12,
+    maxWidth: 320,
+  },
+  noticeSubText: {
+    fontSize: 13,
+    color: '#64748B',
+    textAlign: 'center',
+    lineHeight: 20,
+    marginBottom: 24,
+    maxWidth: 320,
+  },
   backBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
     backgroundColor: '#2563EB',
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 8,
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderRadius: 12,
   },
   backBtnText: {
     color: '#FFFFFF',
     fontWeight: '700',
+    fontSize: 14,
   },
   header: {
     flexDirection: 'row',

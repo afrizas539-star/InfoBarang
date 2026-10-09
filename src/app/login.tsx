@@ -17,14 +17,15 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useAuth } from '@/context/AuthContext';
-import { UserRole } from '@/types';
 
 /**
- * PRIORITAS 2 — SISTEM AUTENTIFIKASI BERBASIS ROLE
- * 
- * Pilihan Role:
- * 1. MAHASISWA: Login via NIM / Akun Mahasiswa -> Masuk ke Dashboard Mahasiswa (/home)
- * 2. ADMIN/PETUGAS: Login via Akun Gmail & Password -> Masuk ke Dashboard Petugas (/admin/dashboard)
+ * SATU HALAMAN LOGIN — Role ditentukan otomatis dari data akun
+ *
+ * Alur:
+ * Input Email → Input Password → Login
+ * → Sistem membaca role akun
+ * → Jika role = 'admin'  → Dashboard Admin (/admin/dashboard)
+ * → Jika role = 'student' → Dashboard Mahasiswa (/home)
  */
 export default function LoginScreen() {
   const router = useRouter();
@@ -37,8 +38,6 @@ export default function LoginScreen() {
     adminProfile,
     isLoadingAuth,
   } = useAuth();
-
-  const [activeRoleTab, setActiveRoleTab] = useState<UserRole>('student');
 
   // Form states
   const [identifier, setIdentifier] = useState('');
@@ -58,33 +57,20 @@ export default function LoginScreen() {
     }
   }, [isAuthenticated, role, isLoadingAuth]);
 
-  const handleTabChange = (newRole: UserRole) => {
-    setActiveRoleTab(newRole);
-    setErrorMessage('');
-    setIdentifier('');
-    setPassword('');
-  };
-
+  /**
+   * Fungsi login tunggal — auto-deteksi role berdasarkan email
+   * Admin dikenal dari email yang cocok dengan akun admin
+   * Semua selain itu diperlakukan sebagai mahasiswa
+   */
   const handleLogin = async () => {
     setErrorMessage('');
 
-    // Validasi form (Prioritas 20)
-    if (!identifier.trim()) {
-      setErrorMessage(
-        activeRoleTab === 'admin'
-          ? 'Akun Gmail petugas wajib diisi.'
-          : 'NIM atau Email mahasiswa wajib diisi.'
-      );
+    const trimmedId = identifier.trim();
+
+    if (!trimmedId) {
+      setErrorMessage('Email atau NIM wajib diisi.');
       return;
     }
-
-    if (activeRoleTab === 'admin') {
-      if (!identifier.includes('@') || !identifier.includes('.')) {
-        setErrorMessage('Format alamat email Gmail tidak valid.');
-        return;
-      }
-    }
-
     if (!password) {
       setErrorMessage('Password wajib diisi.');
       return;
@@ -92,39 +78,49 @@ export default function LoginScreen() {
 
     try {
       setIsSubmitting(true);
+
+      // Tentukan role berdasarkan email — admin jika cocok dengan akun admin
+      const adminEmail = adminProfile.email.trim().toLowerCase();
+      const isAdminLogin =
+        trimmedId.toLowerCase() === adminEmail ||
+        trimmedId.toLowerCase() === 'admin.kampus@gmail.com';
+
       let res;
-      if (activeRoleTab === 'admin') {
-        res = await loginAsAdmin(identifier, password);
+      if (isAdminLogin) {
+        // Login sebagai admin
+        res = await loginAsAdmin(trimmedId, password);
         if (res.success) {
           router.replace('/admin/dashboard');
         } else {
-          setErrorMessage(res.message || 'Login admin gagal. Periksa kembali akun Gmail Anda.');
+          setErrorMessage(res.message || 'Login gagal. Periksa kembali email dan password.');
         }
       } else {
-        res = await loginAsStudent(identifier, password);
+        // Login sebagai mahasiswa (NIM atau email mahasiswa)
+        res = await loginAsStudent(trimmedId, password);
         if (res.success) {
           router.replace('/home');
         } else {
-          setErrorMessage(res.message || 'Login mahasiswa gagal. Periksa kembali NIM/Email.');
+          setErrorMessage(res.message || 'Login gagal. Periksa kembali NIM/Email dan password.');
         }
       }
     } catch {
-      setErrorMessage('Terjadi gangguan sistem autentifikasi. Silakan coba kembali.');
+      setErrorMessage('Terjadi gangguan sistem. Silakan coba kembali.');
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  // Demo auto-fill helper
-  const handleFillDemo = () => {
+  // Demo auto-fill — pilih berdasarkan isi field yang ada
+  const handleFillDemoStudent = () => {
     setErrorMessage('');
-    if (activeRoleTab === 'admin') {
-      setIdentifier(adminProfile.email || 'admin.kampus@gmail.com');
-      setPassword(adminProfile.password || 'admin123kampus');
-    } else {
-      setIdentifier('2210511045');
-      setPassword('mhs123');
-    }
+    setIdentifier('2210511045');
+    setPassword('mhs123');
+  };
+
+  const handleFillDemoAdmin = () => {
+    setErrorMessage('');
+    setIdentifier(adminProfile.email || 'admin.kampus@gmail.com');
+    setPassword(adminProfile.password || 'admin123kampus');
   };
 
   if (isLoadingAuth) {
@@ -134,8 +130,6 @@ export default function LoginScreen() {
       </View>
     );
   }
-
-  const isAdminTab = activeRoleTab === 'admin';
 
   return (
     <KeyboardAvoidingView
@@ -173,63 +167,20 @@ export default function LoginScreen() {
           </View>
         </View>
 
-        {/* Role Switcher Tabs */}
-        <View style={styles.roleTabContainer}>
-          <TouchableOpacity
-            style={[styles.roleTabBtn, !isAdminTab && styles.roleTabBtnActive]}
-            onPress={() => handleTabChange('student')}
-            activeOpacity={0.8}
-          >
-            <Ionicons
-              name="school"
-              size={18}
-              color={!isAdminTab ? '#2563EB' : '#64748B'}
-            />
-            <Text style={[styles.roleTabText, !isAdminTab && styles.roleTabTextActive]}>
-              Mahasiswa
-            </Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[styles.roleTabBtn, isAdminTab && styles.roleTabBtnActiveAdmin]}
-            onPress={() => handleTabChange('admin')}
-            activeOpacity={0.8}
-          >
-            <Ionicons
-              name="shield-checkmark"
-              size={18}
-              color={isAdminTab ? '#4F46E5' : '#64748B'}
-            />
-            <Text style={[styles.roleTabText, isAdminTab && styles.roleTabTextActiveAdmin]}>
-              Petugas / Admin
-            </Text>
-          </TouchableOpacity>
-        </View>
-
-        {/* Role Explanation Card */}
-        <View style={[styles.roleInfoCard, isAdminTab && styles.roleInfoCardAdmin]}>
-          <Ionicons
-            name={isAdminTab ? 'shield-half' : 'information-circle'}
-            size={20}
-            color={isAdminTab ? '#4F46E5' : '#2563EB'}
-          />
-          <View style={styles.roleInfoTextWrap}>
-            <Text style={styles.roleInfoTitle}>
-              {isAdminTab ? 'Akses Pengelola Lost & Found' : 'Akses Mahasiswa & Civitas'}
-            </Text>
-            <Text style={styles.roleInfoDesc}>
-              {isAdminTab
-                ? 'Gunakan akun Gmail resmi petugas untuk mengelola barang temuan dan verifikasi klaim.'
-                : 'Masuk dengan NIM/Email kampus untuk melihat katalog dan melaporkan barang hilang.'}
+        {/* Tagline */}
+        <View style={styles.taglineCard}>
+          <Ionicons name="shield-checkmark" size={20} color="#2563EB" />
+          <View style={styles.taglineTextWrap}>
+            <Text style={styles.taglineTitle}>Masuk ke Akun Anda</Text>
+            <Text style={styles.taglineDesc}>
+              Sistem otomatis menentukan akses berdasarkan role akun Anda.
             </Text>
           </View>
         </View>
 
         {/* Form Card */}
         <View style={styles.formCard}>
-          <Text style={styles.formTitle}>
-            {isAdminTab ? 'Masuk Portal Petugas' : 'Masuk Akun Mahasiswa'}
-          </Text>
+          <Text style={styles.formTitle}>Login</Text>
 
           {/* Error Banner */}
           {errorMessage.length > 0 && (
@@ -239,27 +190,20 @@ export default function LoginScreen() {
             </View>
           )}
 
-          {/* Identifier Input */}
+          {/* Email / NIM Input */}
           <View style={styles.inputGroup}>
-            <Text style={styles.inputLabel}>
-              {isAdminTab ? 'Akun Gmail Petugas' : 'NIM / Email Mahasiswa'}
-            </Text>
+            <Text style={styles.inputLabel}>Email / NIM</Text>
             <View style={styles.inputWrap}>
-              <Ionicons
-                name={isAdminTab ? 'mail-outline' : 'person-outline'}
-                size={20}
-                color="#64748B"
-              />
+              <Ionicons name="person-outline" size={20} color="#64748B" />
               <TextInput
                 style={styles.textInput}
-                placeholder={
-                  isAdminTab ? 'contoh: admin.kampus@gmail.com' : 'contoh: 2210511045'
-                }
+                placeholder="Email atau NIM mahasiswa"
                 placeholderTextColor="#94A3B8"
                 value={identifier}
                 onChangeText={setIdentifier}
                 autoCapitalize="none"
-                keyboardType={isAdminTab ? 'email-address' : 'default'}
+                keyboardType="email-address"
+                autoCorrect={false}
               />
             </View>
           </View>
@@ -271,11 +215,12 @@ export default function LoginScreen() {
               <Ionicons name="lock-closed-outline" size={20} color="#64748B" />
               <TextInput
                 style={styles.textInput}
-                placeholder="Masukkan kata sandi akun"
+                placeholder="Masukkan kata sandi"
                 placeholderTextColor="#94A3B8"
                 value={password}
                 onChangeText={setPassword}
                 secureTextEntry={!showPassword}
+                autoCorrect={false}
               />
               <TouchableOpacity onPress={() => setShowPassword(!showPassword)} hitSlop={10}>
                 <Ionicons
@@ -289,11 +234,7 @@ export default function LoginScreen() {
 
           {/* Submit Button */}
           <TouchableOpacity
-            style={[
-              styles.submitBtn,
-              isAdminTab ? styles.submitBtnAdmin : styles.submitBtnStudent,
-              isSubmitting && styles.submitBtnDisabled,
-            ]}
+            style={[styles.submitBtn, isSubmitting && styles.submitBtnDisabled]}
             onPress={handleLogin}
             disabled={isSubmitting}
             activeOpacity={0.85}
@@ -302,9 +243,7 @@ export default function LoginScreen() {
               <ActivityIndicator color="#FFFFFF" size="small" />
             ) : (
               <>
-                <Text style={styles.submitBtnText}>
-                  {isAdminTab ? 'Masuk Dashboard Admin' : 'Masuk Dashboard Mahasiswa'}
-                </Text>
+                <Text style={styles.submitBtnText}>Masuk</Text>
                 <Ionicons name="arrow-forward" size={18} color="#FFFFFF" />
               </>
             )}
@@ -312,24 +251,33 @@ export default function LoginScreen() {
 
           {/* Quick Demo Credentials */}
           <View style={styles.demoSection}>
-            <TouchableOpacity
-              style={styles.demoBtn}
-              onPress={handleFillDemo}
-              activeOpacity={0.7}
-            >
-              <Ionicons name="flash-outline" size={16} color="#64748B" />
-              <Text style={styles.demoBtnText}>
-                Isi Otomatis Akun Demo {isAdminTab ? 'Admin' : 'Mahasiswa'}
-              </Text>
-            </TouchableOpacity>
+            <Text style={styles.demoLabel}>Akun Demo:</Text>
+            <View style={styles.demoRow}>
+              <TouchableOpacity
+                style={styles.demoBtn}
+                onPress={handleFillDemoStudent}
+                activeOpacity={0.7}
+              >
+                <Ionicons name="school-outline" size={14} color="#2563EB" />
+                <Text style={styles.demoBtnText}>Mahasiswa</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.demoBtn, styles.demoBtnAdmin]}
+                onPress={handleFillDemoAdmin}
+                activeOpacity={0.7}
+              >
+                <Ionicons name="shield-outline" size={14} color="#4F46E5" />
+                <Text style={[styles.demoBtnText, styles.demoBtnTextAdmin]}>Admin / Petugas</Text>
+              </TouchableOpacity>
+            </View>
           </View>
         </View>
 
-        {/* Security & Protected Route Notice */}
+        {/* Security Notice */}
         <View style={styles.securityNotice}>
           <Ionicons name="lock-closed" size={14} color="#059669" />
           <Text style={styles.securityNoticeText}>
-            Protected Route: Sesi login tersimpan secara aman dengan SecureStore.
+            Sesi login tersimpan secara aman dengan SecureStore.
           </Text>
         </View>
       </ScrollView>
@@ -390,52 +338,7 @@ const styles = StyleSheet.create({
     color: '#64748B',
     fontWeight: '500',
   },
-  roleTabContainer: {
-    flexDirection: 'row',
-    backgroundColor: '#E2E8F0',
-    borderRadius: 12,
-    padding: 4,
-    marginBottom: 16,
-  },
-  roleTabBtn: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 10,
-    borderRadius: 10,
-    gap: 6,
-  },
-  roleTabBtnActive: {
-    backgroundColor: '#FFFFFF',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-  roleTabBtnActiveAdmin: {
-    backgroundColor: '#FFFFFF',
-    shadowColor: '#4F46E5',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.12,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-  roleTabText: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#64748B',
-  },
-  roleTabTextActive: {
-    color: '#2563EB',
-    fontWeight: '700',
-  },
-  roleTabTextActiveAdmin: {
-    color: '#4F46E5',
-    fontWeight: '700',
-  },
-  roleInfoCard: {
+  taglineCard: {
     flexDirection: 'row',
     backgroundColor: '#EFF6FF',
     borderRadius: 12,
@@ -446,19 +349,15 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 20,
   },
-  roleInfoCardAdmin: {
-    backgroundColor: '#EEF2FF',
-    borderColor: '#C7D2FE',
-  },
-  roleInfoTextWrap: {
+  taglineTextWrap: {
     flex: 1,
   },
-  roleInfoTitle: {
+  taglineTitle: {
     fontSize: 13,
     fontWeight: '700',
     color: '#0F172A',
   },
-  roleInfoDesc: {
+  taglineDesc: {
     fontSize: 11,
     color: '#475569',
     marginTop: 2,
@@ -478,7 +377,7 @@ const styles = StyleSheet.create({
     marginBottom: 18,
   },
   formTitle: {
-    fontSize: 17,
+    fontSize: 20,
     fontWeight: '800',
     color: '#0F172A',
     marginBottom: 16,
@@ -529,29 +428,23 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
+    backgroundColor: '#2563EB',
     paddingVertical: 14,
     borderRadius: 12,
     gap: 8,
     marginTop: 6,
+    shadowColor: '#2563EB',
     shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.15,
+    shadowOpacity: 0.25,
     shadowRadius: 6,
     elevation: 3,
-  },
-  submitBtnStudent: {
-    backgroundColor: '#2563EB',
-    shadowColor: '#2563EB',
-  },
-  submitBtnAdmin: {
-    backgroundColor: '#4F46E5',
-    shadowColor: '#4F46E5',
   },
   submitBtnDisabled: {
     opacity: 0.65,
   },
   submitBtnText: {
     color: '#FFFFFF',
-    fontSize: 14,
+    fontSize: 15,
     fontWeight: '800',
   },
   demoSection: {
@@ -560,20 +453,39 @@ const styles = StyleSheet.create({
     borderTopColor: '#F1F5F9',
     paddingTop: 14,
     alignItems: 'center',
+    gap: 10,
+  },
+  demoLabel: {
+    fontSize: 11,
+    color: '#94A3B8',
+    fontWeight: '600',
+  },
+  demoRow: {
+    flexDirection: 'row',
+    gap: 10,
   },
   demoBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    backgroundColor: '#F1F5F9',
+    backgroundColor: '#EFF6FF',
     paddingHorizontal: 14,
     paddingVertical: 8,
     borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#BFDBFE',
+  },
+  demoBtnAdmin: {
+    backgroundColor: '#EEF2FF',
+    borderColor: '#C7D2FE',
   },
   demoBtnText: {
     fontSize: 12,
-    color: '#475569',
-    fontWeight: '600',
+    color: '#2563EB',
+    fontWeight: '700',
+  },
+  demoBtnTextAdmin: {
+    color: '#4F46E5',
   },
   securityNotice: {
     flexDirection: 'row',

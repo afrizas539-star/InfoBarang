@@ -51,11 +51,17 @@ export default function ItemDetailScreen() {
   }
 
   const isLost = item.type === 'lost';
-  const canClaim =
-    item.type === 'found' &&
-    item.status !== 'Sudah Diambil' &&
-    item.status !== 'Selesai' &&
-    item.status !== 'DIAMBIL / SELESAI';
+  const DONE_STATUSES = [
+    'Sudah Diambil',
+    'Selesai',
+    'SELESAI',
+    'DIAMBIL / SELESAI',
+    'Klaim Ditolak',
+  ];
+  const isItemAvailable =
+    item.type === 'found' && !DONE_STATUSES.includes(item.status as string);
+  const isUserAdmin = Boolean(isAdminAuthenticated);
+
 
   // PRIORITAS 8: Status Barang Hilang dan Temuan Dipisah
   const LOST_STATUSES: ItemStatus[] = [
@@ -221,11 +227,15 @@ export default function ItemDetailScreen() {
           )}
 
           {/* SOP Pengambilan Barang Card */}
+          {/* SOP Pengambilan Barang Card */}
           <View style={styles.sopPickupCard}>
-            <Ionicons name="information-circle" size={18} color="#2563EB" />
-            <Text style={styles.sopPickupText}>
-              Untuk mengambil barang fisik, mahasiswa wajib membawa Kartu Tanda Mahasiswa (KTM) aktif dan menyebutkan ciri khusus yang belum diumumkan.
-            </Text>
+            <Ionicons name="shield-checkmark" size={20} color="#2563EB" />
+            <View style={{ flex: 1 }}>
+              <Text style={styles.sopPickupTitle}>Prosedur Pengambilan Barang</Text>
+              <Text style={styles.sopPickupText}>
+                Pengambilan barang temuan hanya dilayani langsung oleh Petugas Keamanan di Posko Kampus. Mahasiswa tidak melakukan klaim mandiri melalui aplikasi — silakan datangi posko dengan membawa KTM aktif dan menyebutkan ciri khusus barang.
+              </Text>
+            </View>
           </View>
 
           {/* Admin Tools If Logged In */}
@@ -277,24 +287,39 @@ export default function ItemDetailScreen() {
           <Text style={styles.sharePoskoBtnText}>Posko</Text>
         </TouchableOpacity>
 
-        {canClaim ? (
+        {isUserAdmin && isItemAvailable ? (
           <TouchableOpacity
             style={styles.mainClaimBtn}
             activeOpacity={0.8}
             onPress={() => router.push(`/claim/${item.id}` as any)}
           >
-            <Ionicons name="shield-checkmark" size={18} color="#FFFFFF" />
-            <Text style={styles.mainClaimBtnText}>Klaim Barang Ini</Text>
+            <Ionicons name="clipboard-outline" size={18} color="#FFFFFF" />
+            <Text style={styles.mainClaimBtnText}>Input Pengambilan (Petugas)</Text>
+          </TouchableOpacity>
+        ) : !isUserAdmin && isItemAvailable ? (
+          <TouchableOpacity
+            style={styles.pickupInfoBtn}
+            activeOpacity={0.8}
+            onPress={() =>
+              Alert.alert(
+                'Prosedur Pengambilan Barang Temuan',
+                'Pengambilan barang temuan harus melalui verifikasi langsung oleh petugas di Posko Keamanan Kampus.\n\nLangkah pengambilan:\n1. Kunjungi Posko Keamanan Kampus.\n2. Bawa Kartu Tanda Mahasiswa (KTM) aktif.\n3. Jelaskan rincian dan ciri khusus barang yang Anda kenali kepada petugas.\n4. Petugas akan memvalidasi bukti kepemilikan dan menyerahkan barang fisik.',
+                [{ text: 'Saya Mengerti' }]
+              )
+            }
+          >
+            <Ionicons name="information-circle-outline" size={18} color="#FFFFFF" />
+            <Text style={styles.pickupInfoBtnText}>Prosedur Pengambilan</Text>
           </TouchableOpacity>
         ) : (
           <View style={styles.disabledClaimBtn}>
             <Ionicons name="lock-closed" size={16} color="#94A3B8" />
             <Text style={styles.disabledClaimBtnText}>
-              {item.status === 'Sudah Diambil'
-                ? 'Barang Sudah Diambil'
+              {DONE_STATUSES.includes(item.status as string)
+                ? 'Barang Sudah Diambil / Selesai'
                 : item.type === 'lost'
-                ? 'Laporan Kehilangan'
-                : 'Klaim Tidak Tersedia'}
+                ? `Laporan Kehilangan (${item.status})`
+                : 'Pengambilan Tidak Tersedia'}
             </Text>
           </View>
         )}
@@ -582,18 +607,24 @@ const styles = StyleSheet.create({
   sopPickupCard: {
     flexDirection: 'row',
     backgroundColor: '#EFF6FF',
-    padding: 12,
-    borderRadius: 12,
-    gap: 10,
+    padding: 14,
+    borderRadius: 14,
+    gap: 12,
     marginBottom: 16,
     borderWidth: 1,
     borderColor: '#BFDBFE',
+    alignItems: 'flex-start',
+  },
+  sopPickupTitle: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#1E3A8A',
+    marginBottom: 4,
   },
   sopPickupText: {
     fontSize: 12,
     color: '#1E40AF',
     lineHeight: 18,
-    flex: 1,
   },
   adminActionCard: {
     backgroundColor: '#F1F5F9',
@@ -696,6 +727,26 @@ const styles = StyleSheet.create({
   mainClaimBtnText: {
     color: '#FFFFFF',
     fontSize: 14,
+    fontWeight: '700',
+  },
+  pickupInfoBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#0284C7',
+    paddingVertical: 12,
+    borderRadius: 12,
+    gap: 8,
+    shadowColor: '#0284C7',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 6,
+    elevation: 4,
+  },
+  pickupInfoBtnText: {
+    color: '#FFFFFF',
+    fontSize: 13,
     fontWeight: '700',
   },
   disabledClaimBtn: {
